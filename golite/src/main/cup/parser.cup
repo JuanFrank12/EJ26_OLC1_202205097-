@@ -1,0 +1,62 @@
+package analisis;
+
+import java_cup.runtime.Symbol;
+
+parser code
+{:
+    Scanner s;
+    parser(Scanner s) {
+        this.s = s;
+    }
+
+    public void syntax_error(Symbol s) {
+        System.err.println("Error de sintaxis en la línea " + s.left + ", columna " + s.right);
+    }
+
+    public void unrecovered_syntax_error(Symbol s) {
+        System.err.println("Error de sintaxis no recuperable en la línea " + s.left + ", columna " + s.right);
+    }
+:}
+
+
+action code 
+{:
+    String consola = "";
+:}
+
+terminal String CADENA,ENTERO,DECIMAL;
+terminal FINCADENA, IMPRIMIR;
+terminal MAS,MENOS,MULTI,DIVI,PAR1,PAR2, UMENOS;
+
+nonterminal INICIO;
+nonterminal INSTRUCCIONES, INSTRUCCION; 
+nonterminal Double EXPRESION;
+
+precedence left MAS,MENOS;
+precedence left MULTI, DIVI;
+precedence right UMENOS;
+
+start with INICIO;
+
+INICIO ::= INSTRUCCIONES    {: RESULT=consola; :}
+;
+
+INSTRUCCIONES ::= INSTRUCCIONES INSTRUCCION
+                | INSTRUCCION
+;
+
+INSTRUCCION ::= IMPRIMIR PAR1 EXPRESION:e PAR2 FINCADENA  {: consola+=e+"\n"; :}
+              | IMPRIMIR PAR1 CADENA:c PAR2 FINCADENA     {: consola+=c+"\n"; :}
+;
+
+EXPRESION ::= MENOS EXPRESION:a               {: RESULT = -a; :}%prec UMENOS
+            | EXPRESION:a MAS EXPRESION:b     {: RESULT = a + b; :}
+            | EXPRESION:a MENOS EXPRESION:b   {: RESULT = a - b; :}
+            | EXPRESION:a MULTI EXPRESION:b    {: RESULT = a * b; :}
+            | EXPRESION:a DIVI EXPRESION:b     {: RESULT = a / b; :}                  
+            | PAR1 EXPRESION:e PAR2           {: RESULT = e; :}
+            | ENTERO:e                        {: RESULT = new Double(e); :}
+            | DECIMAL:e                       {: RESULT = new Double(e); :}
+;
+
+
