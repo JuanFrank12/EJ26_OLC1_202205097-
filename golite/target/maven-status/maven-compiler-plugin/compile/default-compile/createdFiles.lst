@@ -14,17 +14,11 @@ com\olc1\ast\exp\Negate.class
 com\olc1\ast\exp\Add.class
 com\olc1\views\EditorPanel$1.class
 analisis\parser$CUP$parser$actions.class
-com\olc1\visitor\interpreter\value\StringValue.class
-com\olc1\visitor\interpreter\value\DecimalValue.class
 com\olc1\ast\exp\StringLiteral.class
-com\olc1\visitor\interpreter\InterpreterVisitor.class
 com\olc1\ast\exp\Paren.class
 com\olc1\ast\stm\Assign$Context.class
-com\olc1\visitor\interpreter\value\IntValue.class
 com\olc1\ast\exp\Mul$Context.class
 com\olc1\ast\exp\VarRef$Context.class
-com\olc1\visitor\interpreter\value\VoidValue.class
-com\olc1\visitor\interpreter\value\BoolValue.class
 com\olc1\ast\exp\Integers$Context.class
 com\olc1\ast\exp\BoolLiteral.class
 com\olc1\ast\exp\Sub.class
@@ -41,6 +35,5 @@ com\olc1\ast\exp\Integers.class
 com\olc1\ast\stm\Assign.class
 com\olc1\ast\ASTNODE.class
 com\olc1\ast\stm\IfNode.class
-com\olc1\visitor\interpreter\value\ValueWrapper.class
 com\olc1\ast\exp\Sub$Context.class
 analisis\Lexer.class

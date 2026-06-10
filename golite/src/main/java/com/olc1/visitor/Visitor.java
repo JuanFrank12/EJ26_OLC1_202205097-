@@ -17,6 +17,8 @@ import com.olc1.ast.stm.Assign;
 import com.olc1.ast.stm.IfNode;
 import com.olc1.ast.stm.Imprimir;
 import com.olc1.ast.stm.Statments;
+import com.olc1.ast.stm.ElifNode;
+import com.olc1.ast.stm.ElifNodes;
 
 
 public interface Visitor<T> {
@@ -35,4 +37,6 @@ public interface Visitor<T> {
     T visit(Assign.Context ctx);
     T visit(IfNode.Context ctx);
     T visit(Statments.Context ctx);
+    T visit(ElifNode.Context ctx);
+    T visit(ElifNodes.Context ctx);
 }

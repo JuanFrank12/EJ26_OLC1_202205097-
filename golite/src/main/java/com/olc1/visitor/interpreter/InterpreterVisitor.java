@@ -1,18 +1,22 @@
 package com.olc1.visitor.interpreter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.olc1.ast.ASTNODE;
 import com.olc1.ast.exp.*;
 import com.olc1.ast.stm.*;
+import com.olc1.reports.GoliteError;
 import com.olc1.visitor.Visitor;
 import com.olc1.visitor.interpreter.value.*;
 
 public class InterpreterVisitor implements Visitor<ValueWrapper> {
     public String output = "";
     private final ValueWrapper defaultVoid = new VoidValue(-1, -1);
-    private final Map<String, ValueWrapper> variables = new HashMap<>();
+    private Enviroment enviroment = new Enviroment();
+    public final List<GoliteError> errors = new ArrayList<>();
 
     public ValueWrapper Visit(ASTNODE node) {
         return node.accept(this);
@@ -124,24 +128,79 @@ public class InterpreterVisitor implements Visitor<ValueWrapper> {
 
     @Override
     public ValueWrapper visit(VarRef.Context ctx) {
-        ValueWrapper val = variables.get(ctx.name);
-        if (val == null) throw new RuntimeException("Variable no definida: " + ctx.name);
-        return val;
+        try{
+            return enviroment.get(ctx.name);
+        } catch (RuntimeException e){
+            this.errors.add(
+                new GoliteError("Semantico", "Variable '" +ctx.name +" no declarado",
+                    ctx.line,
+                    ctx.column));
+            return defaultVoid;
+        }
     }
+
 
     @Override
     public ValueWrapper visit(Assign.Context ctx) {
         ValueWrapper val = Visit(ctx.value);
-        variables.put(ctx.name, val);
+
+        try{
+            enviroment.declare(ctx.name, val);
+        } catch (RuntimeException e) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico", 
+                    "Variable '"+ ctx.name+ "' ya declarada en este ambito",
+                    ctx.line,
+                    ctx.column));
+        }
         return defaultVoid;
     }
 
     @Override
     public ValueWrapper visit(IfNode.Context ctx) {
+        Enviroment parentEnv = this.enviroment;
         ValueWrapper cond = Visit(ctx.condition);
+
         if (cond instanceof BoolValue b && b.value()) {
+            this.enviroment = new Enviroment(parentEnv);
             Visit(ctx.body);
+            this.enviroment = parentEnv;
+            return defaultVoid;
+        }
+
+        ElifNodes elifList = ctx.elifList;
+        if(elifList != null){
+            Visit(elifList);
+
+            for (ElifNode elif: elifList.ctx.elifNodesList){
+                Visit(elif);
+                ValueWrapper elifCondition = Visit(elif.ctx.condition);
+
+                if (elifCondition instanceof BoolValue eb && eb.value()){
+                    this.enviroment = new Enviroment(parentEnv);
+                    Visit(elif.ctx.body);
+                    this.enviroment = parentEnv;
+                    return defaultVoid;
+                }
+            }
         }
         return defaultVoid;
+    } 
+    
+    
+
+
+    @Override
+    public ValueWrapper visit(ElifNode.Context ctx){
+        return defaultVoid;
     }
+
+    @Override
+    public ValueWrapper visit(ElifNodes.Context ctx){
+        return defaultVoid;
+    }
+
+
+    
 }

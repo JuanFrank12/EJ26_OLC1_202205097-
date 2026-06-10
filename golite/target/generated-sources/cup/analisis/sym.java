@@ -17,6 +17,7 @@ public interface sym {
   public static final int scol = 14;
   public static final int kwIf = 20;
   public static final int times = 11;
+  public static final int kwElse = 21;
   public static final int EOF = 0;
   public static final int id = 16;
   public static final int slash = 12;
@@ -50,7 +51,8 @@ public interface sym {
   "imprimir",
   "kwTrue",
   "kwFalse",
-  "kwIf"
+  "kwIf",
+  "kwElse"
   };
 }
 

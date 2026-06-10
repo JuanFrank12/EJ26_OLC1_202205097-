@@ -1,7 +1,13 @@
 package analisis;
 
 //importaciones
+
+import java.util.ArrayList;
+import java.util.List;
 import java_cup.runtime.Symbol;
+
+import com.olc1.reports.GoliteError;
+
 
 %%
 
@@ -17,6 +23,7 @@ import java_cup.runtime.Symbol;
 %ignorecase // ignorar mayusculas y minusculas
 
 %{
+    public final List<GoliteError> errors = new ArrayList<>();
     // private Symbol symbol(int type) {
     //     return new Symbol(type, yyline, yycolumn);
     // }
@@ -39,14 +46,14 @@ import java_cup.runtime.Symbol;
 digit = [0-9]
 letter = [a-zA-Z]
 whitespace = [\ \r\t\f\n]+
-escape_char = \\ [\"\\nrt]
+escape_char = \\[\"\\nrt]
 normal_char = [^\"\\\n\r]
 str_lex = ({normal_char} | {escape_char})*
 
-%%
 
+%%
 // Numbers
-{digit}+\.{digit}+  { return new Symbol(sym.decimal, yyline, yycolumn, yytext()); }
+{digit}+"."{digit}+ { return new Symbol(sym.decimal, yyline, yycolumn, yytext()); }
 {digit}+            { return new Symbol(sym.integer, yyline, yycolumn, yytext()); }
 
 // Symbols
@@ -63,10 +70,11 @@ str_lex = ({normal_char} | {escape_char})*
 "="     { return new Symbol(sym.assign, yyline, yycolumn, yytext()); }
 
 // Key Words
-"imprimir"  { return new Symbol(sym.imprimir, yyline, yycolumn, yytext()); }
+"imprimir"  { return new Symbol(sym.imprimir,  yyline, yycolumn, yytext()); }
 "true"      { return new Symbol(sym.kwTrue,    yyline, yycolumn, yytext()); }
 "false"     { return new Symbol(sym.kwFalse,   yyline, yycolumn, yytext()); }
 "if"        { return new Symbol(sym.kwIf,      yyline, yycolumn, yytext()); }
+"else"      { return new Symbol(sym.kwElse,    yyline, yycolumn, yytext()); }
 
 // ID - String
 {letter}({letter}|{digit})* { return new Symbol(sym.id, yyline, yycolumn, yytext()); }
@@ -74,3 +82,6 @@ str_lex = ({normal_char} | {escape_char})*
 
 // Ignorar
 {whitespace}    {/* pass */}
+
+// Error
+.   { errors.add(new GoliteError("Lexico", "Caracter no reconocido: " + yytext(), yyline, yycolumn)); }

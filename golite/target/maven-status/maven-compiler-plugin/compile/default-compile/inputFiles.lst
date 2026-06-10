@@ -11,6 +11,8 @@ c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\j
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\exp\Sub.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\exp\VarRef.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\stm\Assign.java
+c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\stm\ElifNode.java
+c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\stm\ElifNodes.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\stm\IfNode.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\stm\Imprimir.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\ast\stm\Statments.java
@@ -20,6 +22,7 @@ c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\j
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\views\GoliteFrame.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\views\GoliteMenuBar.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\views\MainPanel.java
+c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\visitor\interpreter\Enviroment.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\visitor\interpreter\InterpreterVisitor.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\visitor\interpreter\value\BoolValue.java
 c:\Users\jfgho\OneDrive\Escritorio\Github\EJ26_OLC1_202205097-\golite\src\main\java\com\olc1\visitor\interpreter\value\DecimalValue.java

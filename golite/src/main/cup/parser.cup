@@ -1,19 +1,28 @@
 package analisis;
 
+import java.util.ArrayList;
+import java.util.List;
+
+
 import java_cup.runtime.Symbol;
 
 import com.olc1.ast.ASTNODE;
 import com.olc1.ast.exp.*;
 import com.olc1.ast.stm.*;
+import com.olc1.reports.GoliteError;
+
 
 parser code
 {:
-    public void syntax_error(Symbol s) {
-        System.err.println("Error de sintaxis en la línea " + s.left + ", columna " + s.right);
+    public final List<GoliteError> errors = new ArrayList<>();
+
+     public void syntax_error(Symbol s) {
+        errors.add(new GoliteError("Sintactico", "Simbolo inesperado: " + s.value, s.left, s.right));
     }
 
+
     public void unrecovered_syntax_error(Symbol s) {
-        System.err.println("Error de sintaxis no recuperable en la línea " + s.left + ", columna " + s.right);
+        errors.add(new GoliteError("Sintactico", "Simbolo inesperado no recuperable: " + s.value, s.left, s.right));
     }
 :}
 
@@ -27,12 +36,13 @@ terminal lparen, rparen, lbrace, rbrace;
 terminal plus, minus, times, slash, UMENOS;
 terminal scol, assign;
 terminal String id;
-terminal imprimir, kwTrue, kwFalse, kwIf;
+terminal imprimir, kwTrue, kwFalse, kwIf, kwElse;
 
 nonterminal Statments INICIO;
 nonterminal Statments INSTRUCCIONES;
 nonterminal ASTNODE INSTRUCCION;
 nonterminal ASTNODE EXPRESION;
+nonterminal ElifNodes ELIF;
 
 precedence left plus, minus;
 precedence left times, slash;
@@ -45,15 +55,25 @@ start with INICIO;
 INICIO ::= INSTRUCCIONES:i   {: RESULT = i; :}
 ;
 
-INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i     {: is.add(i); RESULT = is; :}
-                | INSTRUCCION:i                      {: RESULT = new Statments(i); :}
+INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i            {: is.add(i); RESULT = is; :}
+                | INSTRUCCION:i                             {: RESULT = new Statments(i); :}
 ;
 
-INSTRUCCION ::= imprimir lparen EXPRESION:e rparen scol              {: RESULT = new Imprimir(e); :}
-              | id:n assign EXPRESION:e scol                          {: RESULT = new Assign(n, e, nleft, nright); :}
-              | kwIf lparen EXPRESION:c rparen lbrace INSTRUCCION:b rbrace {: RESULT = new IfNode(c, b); :}
-              | error scol                                                {: RESULT = null; :}
+INSTRUCCION   ::= imprimir lparen EXPRESION:e rparen scol                               {: RESULT = new Imprimir(e); :}
+                | imprimir lparen EXPRESION:e rparen                                    {: RESULT = new Imprimir(e); :}
+                | id:n assign EXPRESION:e scol                                          {: RESULT = new Assign(n, e, nleft, nright); :}
+                | id:n assign EXPRESION:e                                               {: RESULT = new Assign(n, e, nleft, nright); :}
+                | kwIf lparen EXPRESION:c rparen lbrace INSTRUCCIONES:b rbrace          {: RESULT = new IfNode(c, b); :}
+                | kwIf lparen EXPRESION:c rparen lbrace INSTRUCCIONES:b rbrace ELIF:el  {: RESULT = new IfNode(c, b, el); :}
+                | error scol                                                            {: RESULT = null; :}
+    ;
+
+ELIF ::= ELIF:el kwElse kwIf lparen EXPRESION:e rparen lbrace INSTRUCCIONES:i rbrace {: el.add(new ElifNode(e, i)); RESULT = el; :}
+    |   kwElse kwIf lparen EXPRESION:e rparen lbrace INSTRUCCIONES:i rbrace {: RESULT = new ElifNodes(new ElifNode(e, i)); :}
 ;
+
+
+
 
 EXPRESION ::= minus EXPRESION:a             {: RESULT = new Negate(a); :}%prec UMENOS
             | EXPRESION:a plus EXPRESION:b  {: RESULT = new Add(a, b); :}
@@ -66,4 +86,5 @@ EXPRESION ::= minus EXPRESION:a             {: RESULT = new Negate(a); :}%prec U
             | id:n                          {: RESULT = new VarRef(n, nleft, nright); :}
             | integer:e                     {: RESULT = new Integers(new Integer(e), eleft, eright); :}
             | decimal:e                     {: RESULT = new Decimal(new Double(e),   eleft, eright); :}
+            | string:s                        {: RESULT = new StringLiteral(s,sleft, sright); :}
 ;
