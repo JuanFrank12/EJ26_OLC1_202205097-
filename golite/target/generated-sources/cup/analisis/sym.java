@@ -8,35 +8,49 @@ package analisis;
 /** CUP generated interface containing symbol constants. */
 public interface sym {
   /* terminals */
-  public static final int DIVI = 10;
-  public static final int CADENA = 2;
-  public static final int DECIMAL = 4;
-  public static final int MENOS = 8;
-  public static final int MULTI = 9;
+  public static final int string = 2;
+  public static final int kwFalse = 19;
+  public static final int minus = 10;
+  public static final int decimal = 4;
+  public static final int imprimir = 17;
   public static final int UMENOS = 13;
-  public static final int ENTERO = 3;
+  public static final int scol = 14;
+  public static final int kwIf = 20;
+  public static final int times = 11;
   public static final int EOF = 0;
-  public static final int MAS = 7;
-  public static final int PAR2 = 12;
-  public static final int PAR1 = 11;
-  public static final int FINCADENA = 5;
+  public static final int id = 16;
+  public static final int slash = 12;
+  public static final int rbrace = 8;
+  public static final int rparen = 6;
+  public static final int assign = 15;
   public static final int error = 1;
-  public static final int IMPRIMIR = 6;
+  public static final int kwTrue = 18;
+  public static final int integer = 3;
+  public static final int plus = 9;
+  public static final int lparen = 5;
+  public static final int lbrace = 7;
   public static final String[] terminalNames = new String[] {
   "EOF",
   "error",
-  "CADENA",
-  "ENTERO",
-  "DECIMAL",
-  "FINCADENA",
-  "IMPRIMIR",
-  "MAS",
-  "MENOS",
-  "MULTI",
-  "DIVI",
-  "PAR1",
-  "PAR2",
-  "UMENOS"
+  "string",
+  "integer",
+  "decimal",
+  "lparen",
+  "rparen",
+  "lbrace",
+  "rbrace",
+  "plus",
+  "minus",
+  "times",
+  "slash",
+  "UMENOS",
+  "scol",
+  "assign",
+  "id",
+  "imprimir",
+  "kwTrue",
+  "kwFalse",
+  "kwIf"
   };
 }
 

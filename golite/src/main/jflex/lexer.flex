@@ -5,70 +5,72 @@ import java_cup.runtime.Symbol;
 
 %%
 
-// Codigo de usuario 
+// Configuración de JFLEX
+%cup //Indicamos que vamos a usar CUP
+// Nombre de la clase del lexer
+%class Lexer 
+%public // Paquete del lexer
+%line // conteo de lienas
+%column // conteo de columnas
+%8bit  // recibir caracteres en formato UTF-8
+// %debug // Habilitar modo debug para ver el proceso de tokenización
+%ignorecase // ignorar mayusculas y minusculas
 
 %{
-    String cadena = "";
+    // private Symbol symbol(int type) {
+    //     return new Symbol(type, yyline, yycolumn);
+    // }
+
+    // private Symbol symbol(int type, Object value) {
+    //     return new Symbol(type, yyline, yycolumn, value);
+    // }
 %}
 
 %init{
-    yyline =1;
-    yycolumn =1;
+    yyline = 1;
+    yycolumn = 1;
 %init}
 
-//Configuracion de flex
-%cup // se indica que vamos a usar cup 
-%class Scanner
-%public
-%line  //LLeva el conteo de lineas 
-%column //conteo de columnas 
-%8bit //caracteres tipo UTF-8
-//%debug // 
-%ignorecase // ignora las mayusculas y minusculas 
+%eofval{
+    return new Symbol(sym.EOF, yyline, yycolumn, yytext());
+%eofval}
 
-%state CADENA
-
-//SIMBOLOS DEL SISTEMA
-PAR1= "("
-PAR2 = ")"
-FINCADENA = ";"
-MAS = "+"
-MENOS = "-"
-MULTI ="*"
-DIVI = "/"
-BLANCOS = [\ \r\t\f\n]+
-ENTERO = [0-9]+
-DECIMAL =[0-9]+"."[0-9]+
-
-//PALABRAS RESERVADAS
-
-IMPRIMIR = "imprimir"
-
+// Definición de patrones léxicos
+digit = [0-9]
+letter = [a-zA-Z]
+whitespace = [\ \r\t\f\n]+
+escape_char = \\ [\"\\nrt]
+normal_char = [^\"\\\n\r]
+str_lex = ({normal_char} | {escape_char})*
 
 %%
-// primero se ponen las reservadas <NOMBRE_TOKEN, LEXEMA>
-<YYINITIAL> {IMPRIMIR}  {return new Symbol(sym.IMPRIMIR, yyline, yycolumn, yytext());}
 
-<YYINITIAL> {DECIMAL}  {return new Symbol(sym.DECIMAL, yyline, yycolumn, yytext());}
-<YYINITIAL> {ENTERO}  {return new Symbol(sym.ENTERO, yyline, yycolumn, yytext());}
+// Numbers
+{digit}+\.{digit}+  { return new Symbol(sym.decimal, yyline, yycolumn, yytext()); }
+{digit}+            { return new Symbol(sym.integer, yyline, yycolumn, yytext()); }
 
-//SIMBOLOS
-<YYINITIAL> {FINCADENA}  {return new Symbol(sym.FINCADENA, yyline, yycolumn, yytext());}
-<YYINITIAL> {MAS}  {return new Symbol(sym.MAS, yyline, yycolumn, yytext());}
-<YYINITIAL> {MENOS}  {return new Symbol(sym.MENOS, yyline, yycolumn, yytext());}
-<YYINITIAL> {MULTI}  {return new Symbol(sym.MULTI, yyline, yycolumn, yytext());}
-<YYINITIAL> {DIVI}  {return new Symbol(sym.DIVI, yyline, yycolumn, yytext());}
-<YYINITIAL> {PAR1}  {return new Symbol(sym.PAR1, yyline, yycolumn, yytext());}
-<YYINITIAL> {PAR2}  {return new Symbol(sym.PAR2, yyline, yycolumn, yytext());}
+// Symbols
+"("     { return new Symbol(sym.lparen, yyline, yycolumn, yytext()); }
+")"     { return new Symbol(sym.rparen, yyline, yycolumn, yytext()); }
+"+"     { return new Symbol(sym.plus, yyline, yycolumn, yytext()); }
+"-"     { return new Symbol(sym.minus, yyline, yycolumn, yytext()); }
+"*"     { return new Symbol(sym.times, yyline, yycolumn, yytext()); }
+"/"     { return new Symbol(sym.slash, yyline, yycolumn, yytext()); }
+// "="     { return new Symbol(sym.allocate); }
+";"     { return new Symbol(sym.scol, yyline, yycolumn, yytext()); }
+"{"     { return new Symbol(sym.lbrace, yyline, yycolumn, yytext()); }
+"}"     { return new Symbol(sym.rbrace, yyline, yycolumn, yytext()); }
+"="     { return new Symbol(sym.assign, yyline, yycolumn, yytext()); }
 
-<YYINITIAL> {BLANCOS}  {/*Ignorar*/}
+// Key Words
+"imprimir"  { return new Symbol(sym.imprimir, yyline, yycolumn, yytext()); }
+"true"      { return new Symbol(sym.kwTrue,    yyline, yycolumn, yytext()); }
+"false"     { return new Symbol(sym.kwFalse,   yyline, yycolumn, yytext()); }
+"if"        { return new Symbol(sym.kwIf,      yyline, yycolumn, yytext()); }
 
-// Moverme a estado cadena
-<YYINITIAL> [\"]    {yybegin(CADENA); cadena=""; }
+// ID - String
+{letter}({letter}|{digit})* { return new Symbol(sym.id, yyline, yycolumn, yytext()); }
+\"{str_lex}\"               { return new Symbol(sym.string, yyline, yycolumn, yytext()); }
 
-<CADENA> {
-    [\"]    {String temporal = cadena; cadena = "";
-            yybegin(YYINITIAL);
-            return new Symbol(sym.CADENA, yyline, yycolumn, temporal);}
-    [^\"]   {cadena+=yytext();}
-}
+// Ignorar
+{whitespace}    {/* pass */}

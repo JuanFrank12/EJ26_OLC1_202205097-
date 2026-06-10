@@ -2,13 +2,12 @@ package analisis;
 
 import java_cup.runtime.Symbol;
 
+import com.olc1.ast.ASTNODE;
+import com.olc1.ast.exp.*;
+import com.olc1.ast.stm.*;
+
 parser code
 {:
-    Scanner s;
-    parser(Scanner s) {
-        this.s = s;
-    }
-
     public void syntax_error(Symbol s) {
         System.err.println("Error de sintaxis en la línea " + s.left + ", columna " + s.right);
     }
@@ -18,45 +17,53 @@ parser code
     }
 :}
 
-
-action code 
+action code
 {:
     String consola = "";
 :}
 
-terminal String CADENA,ENTERO,DECIMAL;
-terminal FINCADENA, IMPRIMIR;
-terminal MAS,MENOS,MULTI,DIVI,PAR1,PAR2, UMENOS;
+terminal String string, integer, decimal;
+terminal lparen, rparen, lbrace, rbrace;
+terminal plus, minus, times, slash, UMENOS;
+terminal scol, assign;
+terminal String id;
+terminal imprimir, kwTrue, kwFalse, kwIf;
 
-nonterminal INICIO;
-nonterminal INSTRUCCIONES, INSTRUCCION; 
-nonterminal Double EXPRESION;
+nonterminal Statments INICIO;
+nonterminal Statments INSTRUCCIONES;
+nonterminal ASTNODE INSTRUCCION;
+nonterminal ASTNODE EXPRESION;
 
-precedence left MAS,MENOS;
-precedence left MULTI, DIVI;
+precedence left plus, minus;
+precedence left times, slash;
 precedence right UMENOS;
 
 start with INICIO;
 
-INICIO ::= INSTRUCCIONES    {: RESULT=consola; :}
+// Gramatica
+
+INICIO ::= INSTRUCCIONES:i   {: RESULT = i; :}
 ;
 
-INSTRUCCIONES ::= INSTRUCCIONES INSTRUCCION
-                | INSTRUCCION
+INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i     {: is.add(i); RESULT = is; :}
+                | INSTRUCCION:i                      {: RESULT = new Statments(i); :}
 ;
 
-INSTRUCCION ::= IMPRIMIR PAR1 EXPRESION:e PAR2 FINCADENA  {: consola+=e+"\n"; :}
-              | IMPRIMIR PAR1 CADENA:c PAR2 FINCADENA     {: consola+=c+"\n"; :}
+INSTRUCCION ::= imprimir lparen EXPRESION:e rparen scol              {: RESULT = new Imprimir(e); :}
+              | id:n assign EXPRESION:e scol                          {: RESULT = new Assign(n, e, nleft, nright); :}
+              | kwIf lparen EXPRESION:c rparen lbrace INSTRUCCION:b rbrace {: RESULT = new IfNode(c, b); :}
+              | error scol                                                {: RESULT = null; :}
 ;
 
-EXPRESION ::= MENOS EXPRESION:a               {: RESULT = -a; :}%prec UMENOS
-            | EXPRESION:a MAS EXPRESION:b     {: RESULT = a + b; :}
-            | EXPRESION:a MENOS EXPRESION:b   {: RESULT = a - b; :}
-            | EXPRESION:a MULTI EXPRESION:b    {: RESULT = a * b; :}
-            | EXPRESION:a DIVI EXPRESION:b     {: RESULT = a / b; :}                  
-            | PAR1 EXPRESION:e PAR2           {: RESULT = e; :}
-            | ENTERO:e                        {: RESULT = new Double(e); :}
-            | DECIMAL:e                       {: RESULT = new Double(e); :}
+EXPRESION ::= minus EXPRESION:a             {: RESULT = new Negate(a); :}%prec UMENOS
+            | EXPRESION:a plus EXPRESION:b  {: RESULT = new Add(a, b); :}
+            | EXPRESION:a minus EXPRESION:b {: RESULT = new Sub(a, b); :}
+            | EXPRESION:a times EXPRESION:b {: RESULT = new Mul(a, b); :}
+            | EXPRESION:a slash EXPRESION:b {: RESULT = new Div(a, b); :}
+            | lparen EXPRESION:e rparen     {: RESULT = new Paren(e); :}
+            | kwTrue:t                      {: RESULT = new BoolLiteral(true,  tleft, tright); :}
+            | kwFalse:f                     {: RESULT = new BoolLiteral(false, fleft, fright); :}
+            | id:n                          {: RESULT = new VarRef(n, nleft, nright); :}
+            | integer:e                     {: RESULT = new Integers(new Integer(e), eleft, eright); :}
+            | decimal:e                     {: RESULT = new Decimal(new Double(e),   eleft, eright); :}
 ;
-
-
