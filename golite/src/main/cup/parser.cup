@@ -12,6 +12,7 @@ import com.olc1.ast.stm.*;
 import com.olc1.reports.GoliteError;
 
 
+
 parser code
 {:
     public final List<GoliteError> errors = new ArrayList<>();
@@ -31,22 +32,34 @@ action code
     String consola = "";
 :}
 
-terminal String string, integer, decimal;
+terminal String string, integer, decimal, rune, type;
 terminal lparen, rparen, lbrace, rbrace;
-terminal plus, minus, times, slash, UMENOS;
-terminal scol, assign;
+terminal plus, minus, times, slash, mod, UMENOS;
+terminal scol, assign, alllocate, plusAssign, minusAssign;
+terminal increment, decrement, comma;
 terminal String id;
-terminal imprimir, kwTrue, kwFalse, kwIf, kwElse;
+terminal imprimir, fmtPrintln, fnAtoi, fnParseFloat, fnTypeOf, fnTypeString, kwTrue, kwFalse, kwIf, kwElse, kwVar;
+terminal lowertag, greatertag, lowerEqual, greaterEqual, equal, notEqual;
+terminal and, or, not;
+terminal kwFor, kwBreak, kwContinue, kwNil;
+
 
 nonterminal Statments INICIO;
 nonterminal Statments INSTRUCCIONES;
 nonterminal ASTNODE INSTRUCCION;
 nonterminal ASTNODE EXPRESION;
+nonterminal ASTNODE FOR_INIT;
+nonterminal ASTNODE FOR_UPDATE;
 nonterminal ElifNodes ELIF;
+nonterminal java.util.List<ASTNODE> EXPRESIONES;
 
+precedence left or;
+precedence left and;
+precedence left equal, notEqual;
+precedence left lowertag, greatertag, lowerEqual, greaterEqual;
 precedence left plus, minus;
-precedence left times, slash;
-precedence right UMENOS;
+precedence left times, slash, mod;
+precedence right not, UMENOS;
 
 start with INICIO;
 
@@ -55,36 +68,97 @@ start with INICIO;
 INICIO ::= INSTRUCCIONES:i   {: RESULT = i; :}
 ;
 
-INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i            {: is.add(i); RESULT = is; :}
-                | INSTRUCCION:i                             {: RESULT = new Statments(i); :}
+INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i                                       {: if (i != null) is.add(i); RESULT = is; :}
+                | INSTRUCCION:i                                                        {: RESULT = new Statments(i); :}
 ;
 
-INSTRUCCION   ::= imprimir lparen EXPRESION:e rparen scol                               {: RESULT = new Imprimir(e); :}
-                | imprimir lparen EXPRESION:e rparen                                    {: RESULT = new Imprimir(e); :}
-                | id:n assign EXPRESION:e scol                                          {: RESULT = new Assign(n, e, nleft, nright); :}
-                | id:n assign EXPRESION:e                                               {: RESULT = new Assign(n, e, nleft, nright); :}
-                | kwIf lparen EXPRESION:c rparen lbrace INSTRUCCIONES:b rbrace          {: RESULT = new IfNode(c, b); :}
-                | kwIf lparen EXPRESION:c rparen lbrace INSTRUCCIONES:b rbrace ELIF:el  {: RESULT = new IfNode(c, b, el); :}
-                | error scol                                                            {: RESULT = null; :}
-    ;
-
-ELIF ::= ELIF:el kwElse kwIf lparen EXPRESION:e rparen lbrace INSTRUCCIONES:i rbrace {: el.add(new ElifNode(e, i)); RESULT = el; :}
-    |   kwElse kwIf lparen EXPRESION:e rparen lbrace INSTRUCCIONES:i rbrace {: RESULT = new ElifNodes(new ElifNode(e, i)); :}
+FOR_INIT ::= id:n assign EXPRESION:e                                                   {: RESULT = new Assign(n, e, nleft, nright); :}
+           | id:i alllocate EXPRESION:e                                                {: RESULT = new AllLocate(i, e, ileft, iright); :}
 ;
 
+FOR_UPDATE ::= id:i alllocate EXPRESION:e                                              {: RESULT = new AllLocate(i, e, ileft, iright); :}
+                | id:i plusAssign EXPRESION:e                                          {: RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), e), ileft, iright); :}
+                | id:i minusAssign EXPRESION:e                                         {: RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), e), ileft, iright); :}
+                | id:i increment                                                       {: RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), new Integers(1, ileft, iright)), ileft, iright); :}
+                | id:i decrement                                                       {: RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), new Integers(1, ileft, iright)), ileft, iright); :}
+                ;
+
+INSTRUCCION ::= imprimir lparen rparen scol
+                {: RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>()); :}
+              | fmtPrintln lparen rparen scol
+                {: RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>()); :}
+              | imprimir lparen EXPRESIONES:e rparen scol
+                {: RESULT = new Imprimir(e); :}
+              | fmtPrintln lparen EXPRESIONES:e rparen scol
+                {: RESULT = new Imprimir(e); :}
+              | kwVar id:n type:t alllocate EXPRESION:e scol
+                {: RESULT = new VarDecl(n, t, e, nleft, nright); :}
+              | kwVar id:n type:t scol
+                {: RESULT = new VarDecl(n, t, null, nleft, nright); :}
+              | id:n assign EXPRESION:e scol
+                {: RESULT = new Assign(n, e, nleft, nright); :}
+              | id:i alllocate EXPRESION:e scol
+                {: RESULT = new AllLocate(i, e, ileft, iright); :}
+              | id:i plusAssign EXPRESION:e scol
+                {: RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), e), ileft, iright); :}
+              | id:i minusAssign EXPRESION:e scol
+                {: RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), e), ileft, iright); :}
+              | kwIf EXPRESION:c lbrace INSTRUCCIONES:b rbrace
+                {: RESULT = new IfNode(c, b); :}
+              | kwIf EXPRESION:c lbrace INSTRUCCIONES:b rbrace ELIF:el
+                {: RESULT = new IfNode(c, b, el); :}
+              | kwFor EXPRESION:e lbrace INSTRUCCIONES:i rbrace
+                {: RESULT = new WhileFor(e, i); :}
+              | kwFor FOR_INIT:init scol EXPRESION:c scol FOR_UPDATE:upd lbrace INSTRUCCIONES:b rbrace
+                {: RESULT = new WhileFor(init, c, upd, b); :}
+              | lbrace INSTRUCCIONES:b rbrace
+                {: RESULT = new Block(b); :}
+              | kwBreak:b scol
+                {: RESULT = new BreakStm(bleft, bright); :}
+              | kwContinue:c scol
+                {: RESULT = new ContinueStm(cleft, cright); :}
+              | scol
+                {: RESULT = null; :}
+              | error scol
+                {:parser.errors.add(new GoliteError("Sintactico","Sentencia invalida. Se recupero hasta fin de linea o ';'",0,0));RESULT = null;:}
+;
+
+ELIF ::= ELIF:el kwElse kwIf EXPRESION:e lbrace INSTRUCCIONES:i rbrace  {: el.add(new ElifNode(e, i)); RESULT = el; :}
+        | kwElse kwIf EXPRESION:e lbrace INSTRUCCIONES:i rbrace         {: RESULT = new ElifNodes(new ElifNode(e, i)); :}
+        | ELIF:el kwElse:els lbrace INSTRUCCIONES:i rbrace              {: el.add(new ElifNode(new BoolLiteral(true, elsleft, elsright), i)); RESULT = el; :}
+        | kwElse:els lbrace INSTRUCCIONES:i rbrace                      {: RESULT = new ElifNodes(new ElifNode(new BoolLiteral(true, elsleft, elsright), i)); :}
+        ;
 
 
+EXPRESIONES ::= EXPRESIONES:l comma EXPRESION:e   {: l.add(e); RESULT = l; :}
+                | EXPRESION:e {: java.util.List<ASTNODE> list = new java.util.ArrayList<>(); list.add(e); RESULT = list;:}
+;
 
 EXPRESION ::= minus EXPRESION:a             {: RESULT = new Negate(a); :}%prec UMENOS
             | EXPRESION:a plus EXPRESION:b  {: RESULT = new Add(a, b); :}
             | EXPRESION:a minus EXPRESION:b {: RESULT = new Sub(a, b); :}
             | EXPRESION:a times EXPRESION:b {: RESULT = new Mul(a, b); :}
             | EXPRESION:a slash EXPRESION:b {: RESULT = new Div(a, b); :}
+            | EXPRESION:a mod EXPRESION:b          {: RESULT = new Mod(a, b); :} %prec mod
+            | EXPRESION:a equal EXPRESION:b        {: RESULT = new Compare(a, b, "=="); :}
+            | EXPRESION:a notEqual EXPRESION:b     {: RESULT = new Compare(a, b, "!="); :}
+            | EXPRESION:a lowertag EXPRESION:b     {: RESULT = new LowerTag(a, b); :}
+            | EXPRESION:a greatertag EXPRESION:b   {: RESULT = new Compare(a, b, ">"); :}
+            | EXPRESION:a lowerEqual EXPRESION:b   {: RESULT = new Compare(a, b, "<="); :}
+            | EXPRESION:a greaterEqual EXPRESION:b {: RESULT = new Compare(a, b, ">="); :}
+            | EXPRESION:a and EXPRESION:b          {: RESULT = new Logical(a, b, "&&"); :}
+            | EXPRESION:a or EXPRESION:b           {: RESULT = new Logical(a, b, "||"); :}
+            | not EXPRESION:e                      {: RESULT = new Logical(e, null, "!"); :} %prec not
             | lparen EXPRESION:e rparen     {: RESULT = new Paren(e); :}
             | kwTrue:t                      {: RESULT = new BoolLiteral(true,  tleft, tright); :}
             | kwFalse:f                     {: RESULT = new BoolLiteral(false, fleft, fright); :}
+            | kwNil:n                       {: RESULT = new NilLiteral(nleft, nright); :}
+            | fnAtoi:a lparen EXPRESION:e rparen         {: RESULT = new EmbeddedFunction("Atoi", e, aleft, aright); :}
+            | fnParseFloat:p lparen EXPRESION:e rparen   {: RESULT = new EmbeddedFunction("ParseFloat", e, pleft, pright); :}                   
+            | fnTypeOf:t lparen EXPRESION:e rparen fnTypeString lparen rparen  {: RESULT = new EmbeddedFunction("TypeOfString", e, tleft, tright); :}          
             | id:n                          {: RESULT = new VarRef(n, nleft, nright); :}
             | integer:e                     {: RESULT = new Integers(new Integer(e), eleft, eright); :}
             | decimal:e                     {: RESULT = new Decimal(new Double(e),   eleft, eright); :}
-            | string:s                        {: RESULT = new StringLiteral(s,sleft, sright); :}
+            | string:s                      {: RESULT = new StringLiteral(s,sleft, sright); :}
+            | rune:r                        {: RESULT = new RuneLiteral(r, rleft, rright); :}
 ;

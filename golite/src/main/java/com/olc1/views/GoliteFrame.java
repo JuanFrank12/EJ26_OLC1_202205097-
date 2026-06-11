@@ -7,17 +7,15 @@ import javax.swing.JOptionPane;
 import javax.swing.JTextArea;
 import java.io.BufferedReader;
 import java.io.StringReader;
-
+import java.util.ArrayList;
+import java.util.List;
 
 import analisis.Lexer;
 import analisis.parser;
 import com.olc1.ast.ASTNODE;
 import com.olc1.reports.GoliteError;
 import com.olc1.visitor.interpreter.InterpreterVisitor;
-
-
-
-
+import com.olc1.reports.TokenReport;
 
 public class GoliteFrame extends JFrame {
     private final EditorPanel editorPanel;
@@ -50,11 +48,13 @@ public class GoliteFrame extends JFrame {
     private void wireActions(GoliteMenuBar menuBar) {
         menuBar.onRun(e -> run());
         menuBar.onClean(e -> cleanConsole());
-        menuBar.onNew(e -> editorPanel.setText("imprimir(5+5);\n"));
+        menuBar.onNew(e -> editorPanel.setText("fmt.Println(5+5);\n"));
         menuBar.onExit(e -> System.exit(0));
-        menuBar.onTokens(e -> {
-            /* TODO: reporte de tokens */ });
-        menuBar.onErrors(e -> { errors(); });
+
+        // Reportes
+        menuBar.onTokens(e -> tokens());
+        menuBar.onErrors(e -> errors());
+
         menuBar.onAbout(e -> JOptionPane.showMessageDialog(
                 this,
                 "GolLite\nVersión 1.0.0\nLaboratorio OLC1",
@@ -68,43 +68,147 @@ public class GoliteFrame extends JFrame {
             parser = new parser(lexer);
 
             ASTNODE ast = (ASTNODE) parser.parse().value;
+
             interpreter = new InterpreterVisitor();
             interpreter.Visit(ast);
 
             cleanConsole();
             consoleTextArea.append(interpreter.output);
+
         } catch (Exception e) {
             consoleTextArea.append("Error: " + e.getMessage() + "\n");
         }
+
         consoleTextArea.setCaretPosition(consoleTextArea.getDocument().getLength());
         editorPanel.getTextArea().requestFocus();
     }
 
     private void errors() {
-        cleanConsole();
+    if (lexer == null || parser == null) {
+        JOptionPane.showMessageDialog(
+            this,
+            "Aún no se ha ejecutado nada.",
+            "Reporte de Errores",
+            JOptionPane.WARNING_MESSAGE
+        );
+        return;
+    }
 
-        if (lexer == null || parser == null) {
-            consoleTextArea.append("Aún no se han ejecutado nada.\n");
-            return;
-        }
+    String[] columnas = {
+        "No.",
+        "Descripción",
+        "Línea",
+        "Columna",
+        "Tipo"
+    };
 
-        consoleTextArea.append("Errores léxicos:\n");
+    List<Object[]> filas = new ArrayList<>();
+    int contador = 1;
 
-        for (GoliteError error : lexer.errors) {
-            consoleTextArea.append(error.toString() + "\n");
-        }
+    // Errores léxicos
+    for (GoliteError error : lexer.errors) {
+        filas.add(new Object[] {
+            contador++,
+            error.getDescription(),
+            error.getLine(),
+            error.getColumn(),
+            error.getType()
+        });
+    }
 
-        consoleTextArea.append("\nErrores sintácticos:\n");
+    // Errores sintácticos
+    for (GoliteError error : parser.errors) {
+        filas.add(new Object[] {
+            contador++,
+            error.getDescription(),
+            error.getLine(),
+            error.getColumn(),
+            error.getType()
+        });
+    }
 
-        for (GoliteError error : parser.errors) {
-            consoleTextArea.append(error.toString() + "\n");
-        }
-
-        consoleTextArea.append("\n Errores Semanticos: \n");
+    // Errores semánticos
+    if (interpreter != null) {
         for (GoliteError error : interpreter.errors) {
-            consoleTextArea.append(error.toString()+ "\n");
+            filas.add(new Object[] {
+                contador++,
+                error.getDescription(),
+                error.getLine(),
+                error.getColumn(),
+                error.getType()
+            });
         }
     }
+
+    if (filas.isEmpty()) {
+        filas.add(new Object[] {
+            1,
+            "No hay errores registrados.",
+            "-",
+            "-",
+            "Sin errores"
+        });
+    }
+
+    Object[][] datos = filas.toArray(new Object[0][]);
+
+    new ReportWindow(
+        "Reporte de Errores",
+        columnas,
+        datos
+    ).setVisible(true);
+}
+
+    private void tokens() {
+    if (lexer == null || parser == null) {
+        JOptionPane.showMessageDialog(
+            this,
+            "Aún no se ha ejecutado nada.",
+            "Tabla de Tokens",
+            JOptionPane.WARNING_MESSAGE
+        );
+        return;
+    }
+
+    String[] columnas = {
+        "No.",
+        "Lexema",
+        "Token",
+        "Línea",
+        "Columna"
+    };
+
+    List<Object[]> filas = new ArrayList<>();
+    int contador = 1;
+
+    for (TokenReport token : lexer.tokens) {
+        filas.add(new Object[] {
+            contador++,
+            token.getLexeme(),
+            token.getTokenType(),
+            token.getLine(),
+            token.getColumn()
+        });
+    }
+
+    if (filas.isEmpty()) {
+        filas.add(new Object[] {
+            1,
+            "No hay tokens registrados.",
+            "-",
+            "-",
+            "-"
+        });
+    }
+
+    Object[][] datos = filas.toArray(new Object[0][]);
+
+    new ReportWindow(
+        "Tabla de Tokens",
+        columnas,
+        datos
+    ).setVisible(true);
+}
 
     private void cleanConsole() {
         consoleTextArea.setText("CONSOLA  -  LABORATORIO DE ORGANIZACION DE LENGUAJES Y COMPILADORES 1\n\n");
