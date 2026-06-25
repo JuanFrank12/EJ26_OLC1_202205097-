@@ -9,10 +9,6 @@ public record RuneValue(char value, int line, int column) implements ValueWrappe
 
     @Override
     public String toString() {
-        if (value == 0) {
-            return "0";
-        }
-
-        return String.valueOf(value);
+        return String.valueOf((int) value);
     }
 }

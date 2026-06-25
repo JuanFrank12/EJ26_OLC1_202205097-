@@ -13,6 +13,7 @@ import com.olc1.visitor.Visitor;
 import com.olc1.visitor.interpreter.value.*;
 import com.olc1.visitor.interpreter.transfer.BreakException;
 import com.olc1.visitor.interpreter.transfer.ContinueException;
+import com.olc1.visitor.interpreter.value.RuneValue;
 
 
 public class InterpreterVisitor implements Visitor<ValueWrapper> {
@@ -641,10 +642,20 @@ private char parseRune(String raw) {
 
 @Override
 public ValueWrapper visit(EmbeddedFunction.Context ctx) {
-    ValueWrapper value = Visit(ctx.expression);
 
-    // strconv.Atoi("123") -> int
+    if (ctx.functionName.equals("TypeOfString")) {
+        ValueWrapper value = Visit(ctx.expression);
+
+        if (value == null) {
+            return new StringValue("\"void\"", ctx.line, ctx.column);
+        }
+
+        return new StringValue("\"" + value.getTypeName() + "\"", ctx.line, ctx.column);
+    }
+
     if (ctx.functionName.equals("Atoi")) {
+        ValueWrapper value = Visit(ctx.expression);
+
         if (value instanceof StringValue s) {
             try {
                 int result = Integer.parseInt(s.toString());
@@ -665,7 +676,7 @@ public ValueWrapper visit(EmbeddedFunction.Context ctx) {
         this.errors.add(
             new GoliteError(
                 "Semantico",
-                "strconv.Atoi espera un valor de tipo string y recibió '" + value.getTypeName() + "'",
+                "strconv.Atoi espera un valor de tipo string",
                 ctx.line,
                 ctx.column
             )
@@ -674,8 +685,9 @@ public ValueWrapper visit(EmbeddedFunction.Context ctx) {
         return defaultVoid;
     }
 
-    // strconv.ParseFloat("10.5") -> float64
     if (ctx.functionName.equals("ParseFloat")) {
+        ValueWrapper value = Visit(ctx.expression);
+
         if (value instanceof StringValue s) {
             try {
                 double result = Double.parseDouble(s.toString());
@@ -696,18 +708,13 @@ public ValueWrapper visit(EmbeddedFunction.Context ctx) {
         this.errors.add(
             new GoliteError(
                 "Semantico",
-                "strconv.ParseFloat espera un valor de tipo string y recibió '" + value.getTypeName() + "'",
+                "strconv.ParseFloat espera un valor de tipo string",
                 ctx.line,
                 ctx.column
             )
         );
 
         return defaultVoid;
-    }
-
-    // reflect.TypeOf(valor).string() -> string con el tipo
-    if (ctx.functionName.equals("TypeOfString")) {
-        return new StringValue("\"" + value.getTypeName() + "\"", ctx.line, ctx.column);
     }
 
     this.errors.add(
@@ -721,6 +728,7 @@ public ValueWrapper visit(EmbeddedFunction.Context ctx) {
 
     return defaultVoid;
 }
+
 
 @Override
 public ValueWrapper visit(BreakStm.Context ctx) {
@@ -849,20 +857,37 @@ public ValueWrapper visit(Compare.Context ctx) {
 
         if (left instanceof IntValue l && right instanceof IntValue r) {
             result = l.value() == r.value();
+
         } else if (left instanceof IntValue l && right instanceof DecimalValue r) {
             result = l.value() == r.value();
+
         } else if (left instanceof DecimalValue l && right instanceof IntValue r) {
             result = l.value() == r.value();
+
         } else if (left instanceof DecimalValue l && right instanceof DecimalValue r) {
             result = l.value() == r.value();
+
         } else if (left instanceof BoolValue l && right instanceof BoolValue r) {
             result = l.value() == r.value();
+
         } else if (left instanceof StringValue l && right instanceof StringValue r) {
             result = l.toString().equals(r.toString());
+
+        } else if (left instanceof RuneValue l && right instanceof RuneValue r) {
+            result = l.value() == r.value();
+
+        } else if (left instanceof RuneValue l && right instanceof IntValue r) {
+            result = ((int) l.value()) == r.value();
+
+        } else if (left instanceof IntValue l && right instanceof RuneValue r) {
+            result = l.value() == ((int) r.value());
+
         } else if (left instanceof NilValue && right instanceof NilValue) {
             result = true;
+
         } else if (left instanceof NilValue || right instanceof NilValue) {
             result = false;
+
         } else {
             this.errors.add(
                 new GoliteError(
@@ -883,7 +908,9 @@ public ValueWrapper visit(Compare.Context ctx) {
     }
 
     // Relacionales > >= <=
-    if (hasNil(left, right, op)) return defaultVoid;
+    if (hasNil(left, right, op)) {
+        return defaultVoid;
+    }
 
     if (left instanceof IntValue l && right instanceof IntValue r) {
         return new BoolValue(compareNumbers(l.value(), r.value(), op), l.line(), l.column());
@@ -901,6 +928,18 @@ public ValueWrapper visit(Compare.Context ctx) {
         return new BoolValue(compareNumbers(l.value(), r.value(), op), l.line(), l.column());
     }
 
+    if (left instanceof RuneValue l && right instanceof RuneValue r) {
+        return new BoolValue(compareNumbers((int) l.value(), (int) r.value(), op), l.line(), l.column());
+    }
+
+    if (left instanceof RuneValue l && right instanceof IntValue r) {
+        return new BoolValue(compareNumbers((int) l.value(), r.value(), op), l.line(), l.column());
+    }
+
+    if (left instanceof IntValue l && right instanceof RuneValue r) {
+        return new BoolValue(compareNumbers(l.value(), (int) r.value(), op), l.line(), l.column());
+    }
+
     this.errors.add(
         new GoliteError(
             "Semantico",
@@ -912,6 +951,7 @@ public ValueWrapper visit(Compare.Context ctx) {
 
     return defaultVoid;
 }
+
 
 private boolean compareNumbers(double left, double right, String op) {
     return switch (op) {

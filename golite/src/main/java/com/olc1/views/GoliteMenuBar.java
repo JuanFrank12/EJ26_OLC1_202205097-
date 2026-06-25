@@ -8,6 +8,7 @@ import java.awt.event.MouseEvent;
 
 public class GoliteMenuBar extends JMenuBar {
     private final JMenuItem newItem;
+    private final JMenuItem loadItem;
     private final JMenuItem exitItem;
     private final JButton runButton;
     private final JButton cleanButton;
@@ -23,8 +24,11 @@ public class GoliteMenuBar extends JMenuBar {
         JMenu helpMenu = new JMenu("Ayuda");
 
         newItem = new JMenuItem("Nuevo");
+        loadItem = new JMenuItem("Cargar archivo .GLT");
         exitItem = new JMenuItem("Salir");
+
         fileMenu.add(newItem);
+        fileMenu.add(loadItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
 
@@ -46,6 +50,7 @@ public class GoliteMenuBar extends JMenuBar {
     public void onRun(ActionListener l)    { runButton.addActionListener(l); }
     public void onClean(ActionListener l)  { cleanButton.addActionListener(l); }
     public void onNew(ActionListener l)    { newItem.addActionListener(l); }
+    public void onLoad(ActionListener l)   { loadItem.addActionListener(l); }
     public void onExit(ActionListener l)   { exitItem.addActionListener(l); }
     public void onTokens(ActionListener l) { tokensItem.addActionListener(l); }
     public void onErrors(ActionListener l) { errorsItem.addActionListener(l); }
@@ -57,17 +62,20 @@ public class GoliteMenuBar extends JMenuBar {
         button.setBorderPainted(false);
         button.setContentAreaFilled(false);
         button.setOpaque(false);
+
         button.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
                 button.setBackground(Color.LIGHT_GRAY);
                 button.setOpaque(true);
             }
+
             @Override
             public void mouseReleased(MouseEvent e) {
                 button.setOpaque(false);
             }
         });
+
         return button;
     }
 }

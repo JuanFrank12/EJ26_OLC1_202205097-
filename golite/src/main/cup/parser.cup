@@ -12,7 +12,6 @@ import com.olc1.ast.stm.*;
 import com.olc1.reports.GoliteError;
 
 
-
 parser code
 {:
     public final List<GoliteError> errors = new ArrayList<>();
@@ -20,13 +19,10 @@ parser code
      public void syntax_error(Symbol s) {
         errors.add(new GoliteError("Sintactico", "Simbolo inesperado: " + s.value, s.left, s.right));
     }
-
-
     public void unrecovered_syntax_error(Symbol s) {
         errors.add(new GoliteError("Sintactico", "Simbolo inesperado no recuperable: " + s.value, s.left, s.right));
     }
 :}
-
 action code
 {:
     String consola = "";
@@ -51,7 +47,7 @@ nonterminal ASTNODE EXPRESION;
 nonterminal ASTNODE FOR_INIT;
 nonterminal ASTNODE FOR_UPDATE;
 nonterminal ElifNodes ELIF;
-nonterminal java.util.List<ASTNODE> EXPRESIONES;
+nonterminal TYPEOF_SUFFIX;
 
 precedence left or;
 precedence left and;
@@ -68,8 +64,42 @@ start with INICIO;
 INICIO ::= INSTRUCCIONES:i   {: RESULT = i; :}
 ;
 
-INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i                                       {: if (i != null) is.add(i); RESULT = is; :}
-                | INSTRUCCION:i                                                        {: RESULT = new Statments(i); :}
+INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i
+                  {:
+                      if (i != null) is.add(i);
+                      RESULT = is;
+                  :}
+
+                | INSTRUCCIONES:is error scol
+                  {:
+                      parser.errors.add(
+                          new GoliteError(
+                              "Sintactico",
+                              "Sentencia invalida. Se recupero hasta fin de linea o ';'",
+                              0,
+                              0
+                          )
+                      );
+                      RESULT = is;
+                  :}
+
+                | INSTRUCCION:i
+                  {:
+                      RESULT = new Statments(i);
+                  :}
+
+                | error scol
+                  {:
+                      parser.errors.add(
+                          new GoliteError(
+                              "Sintactico",
+                              "Sentencia invalida. Se recupero hasta fin de linea o ';'",
+                              0,
+                              0
+                          )
+                      );
+                      RESULT = new Statments(null);
+                  :}
 ;
 
 FOR_INIT ::= id:n assign EXPRESION:e                                                   {: RESULT = new Assign(n, e, nleft, nright); :}
@@ -85,42 +115,126 @@ FOR_UPDATE ::= id:i alllocate EXPRESION:e                                       
 
 INSTRUCCION ::= imprimir lparen rparen scol
                 {: RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>()); :}
+
               | fmtPrintln lparen rparen scol
                 {: RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>()); :}
+
               | imprimir lparen EXPRESIONES:e rparen scol
                 {: RESULT = new Imprimir(e); :}
+
               | fmtPrintln lparen EXPRESIONES:e rparen scol
                 {: RESULT = new Imprimir(e); :}
+
+              /* Recuperación: error dentro de print(...) */
+              | imprimir lparen error rparen scol
+                {:
+                    parser.errors.add(
+                        new GoliteError(
+                            "Sintactico",
+                            "Expresion invalida dentro de print. Se recupero hasta ')'.",
+                            0,
+                            0
+                        )
+                    );
+                    RESULT = null;
+                :}
+
+              | fmtPrintln lparen error rparen scol
+                {:
+                    parser.errors.add(
+                        new GoliteError(
+                            "Sintactico",
+                            "Expresion invalida dentro de fmt.Println. Se recupero hasta ')'.",
+                            0,
+                            0
+                        )
+                    );
+                    RESULT = null;
+                :}
+
               | kwVar id:n type:t alllocate EXPRESION:e scol
                 {: RESULT = new VarDecl(n, t, e, nleft, nright); :}
+
               | kwVar id:n type:t scol
                 {: RESULT = new VarDecl(n, t, null, nleft, nright); :}
+
+              /* Recuperación: var z int = */
+              | kwVar id:n type:t alllocate scol
+                {:
+                    parser.errors.add(
+                        new GoliteError(
+                            "Sintactico",
+                            "Declaracion incompleta de variable '" + n + "'. Se esperaba una expresion despues de '='.",
+                            nleft,
+                            nright
+                        )
+                    );
+                    RESULT = null;
+                :}
+
               | id:n assign EXPRESION:e scol
                 {: RESULT = new Assign(n, e, nleft, nright); :}
+
+              /* Recuperación: y := */
+              | id:n assign scol
+                {:
+                    parser.errors.add(
+                        new GoliteError(
+                            "Sintactico",
+                            "Asignacion incompleta para la variable '" + n + "'. Se esperaba una expresion.",
+                            nleft,
+                            nright
+                        )
+                    );
+                    RESULT = null;
+                :}
+
               | id:i alllocate EXPRESION:e scol
                 {: RESULT = new AllLocate(i, e, ileft, iright); :}
+
+              /* Recuperación: x = */
+              | id:i alllocate scol
+                {:
+                    parser.errors.add(
+                        new GoliteError(
+                            "Sintactico",
+                            "Reasignacion incompleta para la variable '" + i + "'. Se esperaba una expresion.",
+                            ileft,
+                            iright
+                        )
+                    );
+                    RESULT = null;
+                :}
+
               | id:i plusAssign EXPRESION:e scol
                 {: RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), e), ileft, iright); :}
+
               | id:i minusAssign EXPRESION:e scol
                 {: RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), e), ileft, iright); :}
+
               | kwIf EXPRESION:c lbrace INSTRUCCIONES:b rbrace
                 {: RESULT = new IfNode(c, b); :}
+
               | kwIf EXPRESION:c lbrace INSTRUCCIONES:b rbrace ELIF:el
                 {: RESULT = new IfNode(c, b, el); :}
+
               | kwFor EXPRESION:e lbrace INSTRUCCIONES:i rbrace
                 {: RESULT = new WhileFor(e, i); :}
+
               | kwFor FOR_INIT:init scol EXPRESION:c scol FOR_UPDATE:upd lbrace INSTRUCCIONES:b rbrace
                 {: RESULT = new WhileFor(init, c, upd, b); :}
+
               | lbrace INSTRUCCIONES:b rbrace
                 {: RESULT = new Block(b); :}
+
               | kwBreak:b scol
                 {: RESULT = new BreakStm(bleft, bright); :}
+
               | kwContinue:c scol
                 {: RESULT = new ContinueStm(cleft, cright); :}
+
               | scol
                 {: RESULT = null; :}
-              | error scol
-                {:parser.errors.add(new GoliteError("Sintactico","Sentencia invalida. Se recupero hasta fin de linea o ';'",0,0));RESULT = null;:}
 ;
 
 ELIF ::= ELIF:el kwElse kwIf EXPRESION:e lbrace INSTRUCCIONES:i rbrace  {: el.add(new ElifNode(e, i)); RESULT = el; :}
@@ -132,6 +246,14 @@ ELIF ::= ELIF:el kwElse kwIf EXPRESION:e lbrace INSTRUCCIONES:i rbrace  {: el.ad
 
 EXPRESIONES ::= EXPRESIONES:l comma EXPRESION:e   {: l.add(e); RESULT = l; :}
                 | EXPRESION:e {: java.util.List<ASTNODE> list = new java.util.ArrayList<>(); list.add(e); RESULT = list;:}
+;
+
+
+TYPEOF_SUFFIX ::= fnTypeString lparen rparen
+                  {: RESULT = null; :}
+
+                |
+                  {: RESULT = null; :}
 ;
 
 EXPRESION ::= minus EXPRESION:a             {: RESULT = new Negate(a); :}%prec UMENOS
@@ -155,7 +277,7 @@ EXPRESION ::= minus EXPRESION:a             {: RESULT = new Negate(a); :}%prec U
             | kwNil:n                       {: RESULT = new NilLiteral(nleft, nright); :}
             | fnAtoi:a lparen EXPRESION:e rparen         {: RESULT = new EmbeddedFunction("Atoi", e, aleft, aright); :}
             | fnParseFloat:p lparen EXPRESION:e rparen   {: RESULT = new EmbeddedFunction("ParseFloat", e, pleft, pright); :}                   
-            | fnTypeOf:t lparen EXPRESION:e rparen fnTypeString lparen rparen  {: RESULT = new EmbeddedFunction("TypeOfString", e, tleft, tright); :}          
+            | fnTypeOf:t lparen EXPRESION:e rparen TYPEOF_SUFFIX {: RESULT = new EmbeddedFunction("TypeOfString", e, tleft, tright); :}     
             | id:n                          {: RESULT = new VarRef(n, nleft, nright); :}
             | integer:e                     {: RESULT = new Integers(new Integer(e), eleft, eright); :}
             | decimal:e                     {: RESULT = new Decimal(new Double(e),   eleft, eright); :}
