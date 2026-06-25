@@ -44,6 +44,7 @@ nonterminal Statments INICIO;
 nonterminal Statments INSTRUCCIONES;
 nonterminal ASTNODE INSTRUCCION;
 nonterminal ASTNODE EXPRESION;
+nonterminal java.util.List<ASTNODE> EXPRESIONES;
 nonterminal ASTNODE FOR_INIT;
 nonterminal ASTNODE FOR_UPDATE;
 nonterminal ElifNodes ELIF;
