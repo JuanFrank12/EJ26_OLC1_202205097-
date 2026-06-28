@@ -3,7 +3,6 @@ package analisis;
 import java.util.ArrayList;
 import java.util.List;
 
-
 import java_cup.runtime.Symbol;
 
 import com.olc1.ast.ASTNODE;
@@ -16,40 +15,93 @@ parser code
 {:
     public final List<GoliteError> errors = new ArrayList<>();
 
-     public void syntax_error(Symbol s) {
+    public void syntax_error(Symbol s) {
         errors.add(new GoliteError("Sintactico", "Simbolo inesperado: " + s.value, s.left, s.right));
     }
+
     public void unrecovered_syntax_error(Symbol s) {
         errors.add(new GoliteError("Sintactico", "Simbolo inesperado no recuperable: " + s.value, s.left, s.right));
     }
 :}
+
 action code
 {:
     String consola = "";
 :}
 
+
+/* =========================
+   TERMINALES
+   ========================= */
+
 terminal String string, integer, decimal, rune, type;
-terminal lparen, rparen, lbrace, rbrace;
+
+terminal lparen, rparen, lbrace, rbrace, lbracket, rbracket, ifLbrace, switchLbrace, forLbrace;
 terminal plus, minus, times, slash, mod, UMENOS;
 terminal scol, assign, alllocate, plusAssign, minusAssign;
-terminal increment, decrement, comma;
+terminal increment, decrement, comma, colon;
+
 terminal String id;
-terminal imprimir, fmtPrintln, fnAtoi, fnParseFloat, fnTypeOf, fnTypeString, kwTrue, kwFalse, kwIf, kwElse, kwVar;
+
+terminal imprimir, fmtPrintln, fnAtoi, fnParseFloat, fnTypeOf, fnTypeString, fnLen, fnAppend, fnSlicesIndex, fnStringsJoin;
+terminal kwTrue, kwFalse, kwIf, kwElse, kwVar;
+terminal kwFunc;
+terminal kwFor, kwBreak, kwContinue, kwReturn, kwNil, kwRange;
+terminal kwSwitch, kwCase, kwDefault;
+terminal kwType, kwStruct, dot;
+
 terminal lowertag, greatertag, lowerEqual, greaterEqual, equal, notEqual;
 terminal and, or, not;
-terminal kwFor, kwBreak, kwContinue, kwNil;
 
+
+/* =========================
+   NO TERMINALES
+   ========================= */
 
 nonterminal Statments INICIO;
 nonterminal Statments INSTRUCCIONES;
+
 nonterminal ASTNODE INSTRUCCION;
 nonterminal ASTNODE EXPRESION;
+
 nonterminal java.util.List<ASTNODE> EXPRESIONES;
+nonterminal java.util.List<ASTNODE> SLICE_EXPRESIONES;
+
+nonterminal java.util.List<FunctionParam> PARAMS;
+nonterminal FunctionParam PARAM;
+
 nonterminal ASTNODE FOR_INIT;
 nonterminal ASTNODE FOR_UPDATE;
-nonterminal ElifNodes ELIF;
-nonterminal TYPEOF_SUFFIX;
 
+
+nonterminal ElifNodes ELIF;
+
+nonterminal CaseNodes CASES;
+nonterminal CaseNode CASE_CLAUSE;
+nonterminal Statments CASE_BODY;
+nonterminal ASTNODE CASE_INSTRUCCION;
+nonterminal ASTNODE DEFAULT_CASE;
+nonterminal SCOLS;
+
+nonterminal TYPEOF_SUFFIX;
+nonterminal String TYPE;
+
+nonterminal java.util.List<StructField> STRUCT_FIELDS;
+nonterminal StructField STRUCT_FIELD;
+
+nonterminal java.util.List<StructFieldInit> STRUCT_INITS;
+nonterminal StructFieldInit STRUCT_INIT;
+
+nonterminal STRUCT_SCOLES;
+nonterminal SLICE_SCOLES;
+
+
+
+/* =========================
+   PRECEDENCIA
+   ========================= */
+
+precedence left id;
 precedence left or;
 precedence left and;
 precedence left equal, notEqual;
@@ -57,17 +109,33 @@ precedence left lowertag, greatertag, lowerEqual, greaterEqual;
 precedence left plus, minus;
 precedence left times, slash, mod;
 precedence right not, UMENOS;
+precedence left lbracket, rbracket;
+precedence left lbrace;
+precedence left dot;
 
 start with INICIO;
 
-// Gramatica
 
-INICIO ::= INSTRUCCIONES:i   {: RESULT = i; :}
+/* =========================
+   INICIO
+   ========================= */
+
+INICIO ::= INSTRUCCIONES:i
+           {:
+               RESULT = i;
+           :}
 ;
+
+
+/* =========================
+   LISTA DE INSTRUCCIONES GENERAL
+   ========================= */
 
 INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i
                   {:
-                      if (i != null) is.add(i);
+                      if (i != null) {
+                          is.add(i);
+                      }
                       RESULT = is;
                   :}
 
@@ -103,30 +171,73 @@ INSTRUCCIONES ::= INSTRUCCIONES:is INSTRUCCION:i
                   :}
 ;
 
-FOR_INIT ::= id:n assign EXPRESION:e                                                   {: RESULT = new Assign(n, e, nleft, nright); :}
-           | id:i alllocate EXPRESION:e                                                {: RESULT = new AllLocate(i, e, ileft, iright); :}
+
+/* =========================
+   FOR
+   ========================= */
+
+FOR_INIT ::= id:n assign EXPRESION:e
+             {:
+                 RESULT = new Assign(n, e, nleft, nright);
+             :}
+
+           | id:i alllocate EXPRESION:e
+             {:
+                 RESULT = new AllLocate(i, e, ileft, iright);
+             :}
 ;
 
-FOR_UPDATE ::= id:i alllocate EXPRESION:e                                              {: RESULT = new AllLocate(i, e, ileft, iright); :}
-                | id:i plusAssign EXPRESION:e                                          {: RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), e), ileft, iright); :}
-                | id:i minusAssign EXPRESION:e                                         {: RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), e), ileft, iright); :}
-                | id:i increment                                                       {: RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), new Integers(1, ileft, iright)), ileft, iright); :}
-                | id:i decrement                                                       {: RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), new Integers(1, ileft, iright)), ileft, iright); :}
-                ;
+FOR_UPDATE ::= id:i alllocate EXPRESION:e
+               {:
+                   RESULT = new AllLocate(i, e, ileft, iright);
+               :}
+
+             | id:i plusAssign EXPRESION:e
+               {:
+                   RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), e), ileft, iright);
+               :}
+
+             | id:i minusAssign EXPRESION:e
+               {:
+                   RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), e), ileft, iright);
+               :}
+
+             | id:i increment
+               {:
+                   RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), new Integers(1, ileft, iright)), ileft, iright);
+               :}
+
+             | id:i decrement
+               {:
+                   RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), new Integers(1, ileft, iright)), ileft, iright);
+               :}
+;
+
+
+/* =========================
+   INSTRUCCIONES
+   ========================= */
 
 INSTRUCCION ::= imprimir lparen rparen scol
-                {: RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>()); :}
+                {:
+                    RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>());
+                :}
 
               | fmtPrintln lparen rparen scol
-                {: RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>()); :}
+                {:
+                    RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>());
+                :}
 
               | imprimir lparen EXPRESIONES:e rparen scol
-                {: RESULT = new Imprimir(e); :}
+                {:
+                    RESULT = new Imprimir(e);
+                :}
 
               | fmtPrintln lparen EXPRESIONES:e rparen scol
-                {: RESULT = new Imprimir(e); :}
+                {:
+                    RESULT = new Imprimir(e);
+                :}
 
-              /* Recuperación: error dentro de print(...) */
               | imprimir lparen error rparen scol
                 {:
                     parser.errors.add(
@@ -153,14 +264,17 @@ INSTRUCCION ::= imprimir lparen rparen scol
                     RESULT = null;
                 :}
 
-              | kwVar id:n type:t alllocate EXPRESION:e scol
-                {: RESULT = new VarDecl(n, t, e, nleft, nright); :}
+              | kwVar id:n TYPE:t alllocate EXPRESION:e scol
+                {:
+                    RESULT = new VarDecl(n, t, e, nleft, nright);
+                :}
 
-              | kwVar id:n type:t scol
-                {: RESULT = new VarDecl(n, t, null, nleft, nright); :}
+              | kwVar id:n TYPE:t scol
+                {:
+                    RESULT = new VarDecl(n, t, null, nleft, nright);
+                :}
 
-              /* Recuperación: var z int = */
-              | kwVar id:n type:t alllocate scol
+              | kwVar id:n TYPE:t alllocate scol
                 {:
                     parser.errors.add(
                         new GoliteError(
@@ -173,10 +287,21 @@ INSTRUCCION ::= imprimir lparen rparen scol
                     RESULT = null;
                 :}
 
-              | id:n assign EXPRESION:e scol
-                {: RESULT = new Assign(n, e, nleft, nright); :}
+              | kwType id:n kwStruct lbrace STRUCT_SCOLES STRUCT_FIELDS:f STRUCT_SCOLES rbrace
+                {:
+                    RESULT = new StructTypeDecl(n, f, nleft, nright);
+                :}
 
-              /* Recuperación: y := */
+              | kwType id:n kwStruct lbrace STRUCT_SCOLES rbrace
+                {:
+                    RESULT = new StructTypeDecl(n, new java.util.ArrayList<StructField>(), nleft, nright);
+                :}
+
+              | id:n assign EXPRESION:e scol
+                {:
+                    RESULT = new Assign(n, e, nleft, nright);
+                :}
+
               | id:n assign scol
                 {:
                     parser.errors.add(
@@ -190,10 +315,77 @@ INSTRUCCION ::= imprimir lparen rparen scol
                     RESULT = null;
                 :}
 
-              | id:i alllocate EXPRESION:e scol
-                {: RESULT = new AllLocate(i, e, ileft, iright); :}
+              | id:n lbracket EXPRESION:i1 rbracket lbracket EXPRESION:i2 rbracket alllocate EXPRESION:e scol
+                {:
+                    RESULT = new SliceAssign(
+                        new SliceAccess(
+                            new VarRef(n, nleft, nright),
+                            i1,
+                            nleft,
+                            nright
+                        ),
+                        i2,
+                        e,
+                        nleft,
+                        nright
+                    );
+                :}
 
-              /* Recuperación: x = */
+              | id:n lbracket EXPRESION:i rbracket alllocate EXPRESION:e scol
+                {:
+                    RESULT = new SliceAssign(
+                        new VarRef(n, nleft, nright),
+                        i,
+                        e,
+                        nleft,
+                        nright
+                    );
+                :}
+
+               | id:n dot id:f alllocate EXPRESION:e scol
+                {:
+                    RESULT = new StructAssign(
+                        new VarRef(n, nleft, nright),
+                        f,
+                        e,
+                        nleft,
+                        nright
+                    );
+                :} 
+
+                 | id:n dot id:f plusAssign EXPRESION:e scol
+                {:
+                    RESULT = new StructAssign(
+                        new VarRef(n, nleft, nright),
+                        f,
+                        new Add(
+                            new StructAccess(new VarRef(n, nleft, nright), f, nleft, nright),
+                            e
+                        ),
+                        nleft,
+                        nright
+                    );
+                :}
+
+              | id:n dot id:f minusAssign EXPRESION:e scol
+                {:
+                    RESULT = new StructAssign(
+                        new VarRef(n, nleft, nright),
+                        f,
+                        new Sub(
+                            new StructAccess(new VarRef(n, nleft, nright), f, nleft, nright),
+                            e
+                        ),
+                        nleft,
+                        nright
+                    );
+                :}
+
+              | id:i alllocate EXPRESION:e scol
+                {:
+                    RESULT = new AllLocate(i, e, ileft, iright);
+                :}
+
               | id:i alllocate scol
                 {:
                     parser.errors.add(
@@ -208,80 +400,959 @@ INSTRUCCION ::= imprimir lparen rparen scol
                 :}
 
               | id:i plusAssign EXPRESION:e scol
-                {: RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), e), ileft, iright); :}
+                {:
+                    RESULT = new AllLocate(
+                        i,
+                        new Add(new VarRef(i, ileft, iright), e),
+                        ileft,
+                        iright
+                    );
+                :}
 
               | id:i minusAssign EXPRESION:e scol
-                {: RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), e), ileft, iright); :}
+                {:
+                    RESULT = new AllLocate(
+                        i,
+                        new Sub(new VarRef(i, ileft, iright), e),
+                        ileft,
+                        iright
+                    );
+                :}
 
-              | kwIf EXPRESION:c lbrace INSTRUCCIONES:b rbrace
-                {: RESULT = new IfNode(c, b); :}
 
-              | kwIf EXPRESION:c lbrace INSTRUCCIONES:b rbrace ELIF:el
-                {: RESULT = new IfNode(c, b, el); :}
+                
 
-              | kwFor EXPRESION:e lbrace INSTRUCCIONES:i rbrace
-                {: RESULT = new WhileFor(e, i); :}
+              | kwIf EXPRESION:c ifLbrace INSTRUCCIONES:b rbrace ELIF:el
+                {:
+                    RESULT = new IfNode(c, b, el);
+                :}
 
-              | kwFor FOR_INIT:init scol EXPRESION:c scol FOR_UPDATE:upd lbrace INSTRUCCIONES:b rbrace
-                {: RESULT = new WhileFor(init, c, upd, b); :}
+              | kwIf EXPRESION:c ifLbrace INSTRUCCIONES:b rbrace
+                {:
+                    RESULT = new IfNode(c, b);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace SCOLS CASES:c DEFAULT_CASE:d rbrace
+                {:
+                    RESULT = new SwitchNode(e, c, d, sleft, sright);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace CASES:c DEFAULT_CASE:d rbrace
+                {:
+                    RESULT = new SwitchNode(e, c, d, sleft, sright);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace SCOLS CASES:c rbrace
+                {:
+                    RESULT = new SwitchNode(e, c, null, sleft, sright);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace CASES:c rbrace
+                {:
+                    RESULT = new SwitchNode(e, c, null, sleft, sright);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace SCOLS DEFAULT_CASE:d rbrace
+                {:
+                    RESULT = new SwitchNode(e, new CaseNodes(), d, sleft, sright);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace DEFAULT_CASE:d rbrace
+                {:
+                    RESULT = new SwitchNode(e, new CaseNodes(), d, sleft, sright);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace SCOLS rbrace
+                {:
+                    RESULT = new SwitchNode(e, new CaseNodes(), null, sleft, sright);
+                :}
+
+              | kwSwitch:s EXPRESION:e switchLbrace rbrace
+                {:
+                    RESULT = new SwitchNode(e, new CaseNodes(), null, sleft, sright);
+                :}
+
+                 | kwFor EXPRESION:e forLbrace INSTRUCCIONES:i rbrace
+                {:
+                    RESULT = new WhileFor(e, i);
+                :}
+
+              | kwFor FOR_INIT:init scol EXPRESION:c scol FOR_UPDATE:upd forLbrace INSTRUCCIONES:b rbrace
+                {:
+                    RESULT = new WhileFor(init, c, upd, b);
+                :}
+
+                 | kwFor id:idx comma id:val assign kwRange EXPRESION:e forLbrace INSTRUCCIONES:b rbrace
+                {:
+                    RESULT = new ForRange(idx, val, e, b, idxleft, idxright);
+                :}
 
               | lbrace INSTRUCCIONES:b rbrace
-                {: RESULT = new Block(b); :}
+                {:
+                    RESULT = new Block(b);
+                :}
 
               | kwBreak:b scol
-                {: RESULT = new BreakStm(bleft, bright); :}
+                {:
+                    RESULT = new BreakStm(bleft, bright);
+                :}
 
               | kwContinue:c scol
-                {: RESULT = new ContinueStm(cleft, cright); :}
+                {:
+                    RESULT = new ContinueStm(cleft, cright);
+                :}
+
+              | kwReturn:r EXPRESION:e scol
+                {:
+                    RESULT = new ReturnStm(e, rleft, rright);
+                :}
+
+              | kwReturn:r scol
+                {:
+                    RESULT = new ReturnStm(null, rleft, rright);
+                :}
+
+               | kwFunc lparen id:recv TYPE:recvType rparen id:name lparen rparen lbrace INSTRUCCIONES:b rbrace
+                {:
+                    RESULT = new MethodDecl(
+                        recv,
+                        recvType,
+                        name,
+                        null,
+                        b,
+                        nameleft,
+                        nameright
+                    );
+                :}
+
+              | kwFunc lparen id:recv TYPE:recvType rparen id:name lparen rparen TYPE:returnType lbrace INSTRUCCIONES:b rbrace
+                {:
+                    RESULT = new MethodDecl(
+                        recv,
+                        recvType,
+                        name,
+                        returnType,
+                        b,
+                        nameleft,
+                        nameright
+                    );
+                :} 
+
+              | kwFunc lparen id:recv TYPE:recvType rparen id:name lparen PARAMS:p rparen lbrace INSTRUCCIONES:b rbrace
+                {:
+                    RESULT = new MethodDecl(
+                        recv,
+                        recvType,
+                        name,
+                        null,
+                        p,
+                        b,
+                        nameleft,
+                        nameright
+                    );
+                :}
+
+              | kwFunc lparen id:recv TYPE:recvType rparen id:name lparen PARAMS:p rparen TYPE:returnType lbrace INSTRUCCIONES:b rbrace
+                {:
+                    RESULT = new MethodDecl(
+                        recv,
+                        recvType,
+                        name,
+                        returnType,
+                        p,
+                        b,
+                        nameleft,
+                        nameright
+                    );
+                :}  
+
+
+              | kwFunc id:n lparen rparen lbrace INSTRUCCIONES:b rbrace
+                {:
+                    if (n.equals("main")) {
+                        RESULT = new MainFunction(n, b, nleft, nright);
+                    } else {
+                        RESULT = new FunctionDecl(n, null, b, nleft, nright);
+                    }
+                :}
+
+              | kwFunc id:n lparen rparen TYPE:t lbrace INSTRUCCIONES:b rbrace
+                {:
+                    if (n.equals("main")) {
+                        parser.errors.add(
+                            new GoliteError(
+                                "Sintactico",
+                                "La funcion main no debe declarar tipo de retorno",
+                                nleft,
+                                nright
+                            )
+                        );
+                        RESULT = null;
+                    } else {
+                        RESULT = new FunctionDecl(n, t, b, nleft, nright);
+                    }
+                :}
+
+              | kwFunc id:n lparen PARAMS:p rparen lbrace INSTRUCCIONES:b rbrace
+                {:
+                    if (n.equals("main")) {
+                        parser.errors.add(
+                            new GoliteError(
+                                "Sintactico",
+                                "La funcion main no debe tener parametros",
+                                nleft,
+                                nright
+                            )
+                        );
+                        RESULT = null;
+                    } else {
+                        RESULT = new FunctionDecl(n, null, p, b, nleft, nright);
+                    }
+                :}
+
+              | kwFunc id:n lparen PARAMS:p rparen TYPE:t lbrace INSTRUCCIONES:b rbrace
+                {:
+                    if (n.equals("main")) {
+                        parser.errors.add(
+                            new GoliteError(
+                                "Sintactico",
+                                "La funcion main no debe tener parametros ni tipo de retorno",
+                                nleft,
+                                nright
+                            )
+                        );
+                        RESULT = null;
+                    } else {
+                        RESULT = new FunctionDecl(n, t, p, b, nleft, nright);
+                    }
+                :} 
+
+                 | id:n dot id:m lparen rparen scol
+                {:
+                    RESULT = new MethodCall(
+                        new VarRef(n, nleft, nright),
+                        m,
+                        nleft,
+                        nright
+                    );
+                :}
+
+              | id:n dot id:m lparen EXPRESIONES:e rparen scol
+                {:
+                    RESULT = new MethodCall(
+                        new VarRef(n, nleft, nright),
+                        m,
+                        e,
+                        nleft,
+                        nright
+                    );
+                :}
+
+              | id:n lparen rparen scol
+                {:
+                    RESULT = new FunctionCall(n, nleft, nright);
+                :}  
+
+              | id:n lparen EXPRESIONES:e rparen scol
+                {:
+                    RESULT = new FunctionCall(n, e, nleft, nright);
+                :}
 
               | scol
-                {: RESULT = null; :}
-;
-
-ELIF ::= ELIF:el kwElse kwIf EXPRESION:e lbrace INSTRUCCIONES:i rbrace  {: el.add(new ElifNode(e, i)); RESULT = el; :}
-        | kwElse kwIf EXPRESION:e lbrace INSTRUCCIONES:i rbrace         {: RESULT = new ElifNodes(new ElifNode(e, i)); :}
-        | ELIF:el kwElse:els lbrace INSTRUCCIONES:i rbrace              {: el.add(new ElifNode(new BoolLiteral(true, elsleft, elsright), i)); RESULT = el; :}
-        | kwElse:els lbrace INSTRUCCIONES:i rbrace                      {: RESULT = new ElifNodes(new ElifNode(new BoolLiteral(true, elsleft, elsright), i)); :}
-        ;
-
-
-EXPRESIONES ::= EXPRESIONES:l comma EXPRESION:e   {: l.add(e); RESULT = l; :}
-                | EXPRESION:e {: java.util.List<ASTNODE> list = new java.util.ArrayList<>(); list.add(e); RESULT = list;:}
+                {:
+                    RESULT = null;
+                :}
 ;
 
 
-TYPEOF_SUFFIX ::= fnTypeString lparen rparen
-                  {: RESULT = null; :}
+/* =========================
+   SWITCH
+   ========================= */
+
+SCOLS ::= SCOLS scol
+          {:
+              RESULT = null;
+          :}
+
+        | scol
+          {:
+              RESULT = null;
+          :}
+;
+
+CASES ::= CASES:c CASE_CLAUSE:n
+          {:
+              c.add(n);
+              RESULT = c;
+          :}
+
+        | CASE_CLAUSE:n
+          {:
+              RESULT = new CaseNodes(n);
+          :}
+;
+
+CASE_CLAUSE ::= kwCase EXPRESION:e colon SCOLS CASE_BODY:b
+                {:
+                    RESULT = new CaseNode(e, b);
+                :}
+
+              | kwCase EXPRESION:e colon CASE_BODY:b
+                {:
+                    RESULT = new CaseNode(e, b);
+                :}
+;
+
+DEFAULT_CASE ::= kwDefault colon SCOLS CASE_BODY:b
+                 {:
+                     RESULT = b;
+                 :}
+
+               | kwDefault colon CASE_BODY:b
+                 {:
+                     RESULT = b;
+                 :}
+;
+
+CASE_BODY ::= CASE_BODY:b CASE_INSTRUCCION:i
+              {:
+                  if (i != null) {
+                      b.add(i);
+                  }
+                  RESULT = b;
+              :}
+
+            | CASE_INSTRUCCION:i
+              {:
+                  RESULT = new Statments(i);
+              :}
+;
+
+CASE_INSTRUCCION ::= imprimir lparen rparen scol
+                     {:
+                         RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>());
+                     :}
+
+                   | fmtPrintln lparen rparen scol
+                     {:
+                         RESULT = new Imprimir(new java.util.ArrayList<ASTNODE>());
+                     :}
+
+                   | imprimir lparen EXPRESIONES:e rparen scol
+                     {:
+                         RESULT = new Imprimir(e);
+                     :}
+
+                   | fmtPrintln lparen EXPRESIONES:e rparen scol
+                     {:
+                         RESULT = new Imprimir(e);
+                     :}
+
+                   | kwVar id:n TYPE:t alllocate EXPRESION:e scol
+                     {:
+                         RESULT = new VarDecl(n, t, e, nleft, nright);
+                     :}
+
+                   | kwVar id:n TYPE:t scol
+                     {:
+                         RESULT = new VarDecl(n, t, null, nleft, nright);
+                     :}
+
+                   | id:n assign EXPRESION:e scol
+                     {:
+                         RESULT = new Assign(n, e, nleft, nright);
+                     :}
+
+                   | id:n lbracket EXPRESION:i1 rbracket lbracket EXPRESION:i2 rbracket alllocate EXPRESION:e scol
+                     {:
+                         RESULT = new SliceAssign(
+                             new SliceAccess(
+                                 new VarRef(n, nleft, nright),
+                                 i1,
+                                 nleft,
+                                 nright
+                             ),
+                             i2,
+                             e,
+                             nleft,
+                             nright
+                         );
+                     :}
+
+                   | id:n lbracket EXPRESION:i rbracket alllocate EXPRESION:e scol
+                     {:
+                         RESULT = new SliceAssign(new VarRef(n, nleft, nright), i, e, nleft, nright);
+                     :}
+
+                   | id:n dot id:f alllocate EXPRESION:e scol
+                     {:
+                         RESULT = new StructAssign(
+                             new VarRef(n, nleft, nright),
+                             f,
+                             e,
+                             nleft,
+                             nright
+                         );
+                     :}  
+
+                     | id:n dot id:f plusAssign EXPRESION:e scol
+                     {:
+                         RESULT = new StructAssign(
+                             new VarRef(n, nleft, nright),
+                             f,
+                             new Add(
+                                 new StructAccess(new VarRef(n, nleft, nright), f, nleft, nright),
+                                 e
+                             ),
+                             nleft,
+                             nright
+                         );
+                     :}
+
+                   | id:n dot id:f minusAssign EXPRESION:e scol
+                     {:
+                         RESULT = new StructAssign(
+                             new VarRef(n, nleft, nright),
+                             f,
+                             new Sub(
+                                 new StructAccess(new VarRef(n, nleft, nright), f, nleft, nright),
+                                 e
+                             ),
+                             nleft,
+                             nright
+                         );
+                     :}
+
+                   | id:i alllocate EXPRESION:e scol
+                     {:
+                         RESULT = new AllLocate(i, e, ileft, iright);
+                     :}
+
+                   | id:i plusAssign EXPRESION:e scol
+                     {:
+                         RESULT = new AllLocate(i, new Add(new VarRef(i, ileft, iright), e), ileft, iright);
+                     :}
+
+                   | id:i minusAssign EXPRESION:e scol
+                     {:
+                         RESULT = new AllLocate(i, new Sub(new VarRef(i, ileft, iright), e), ileft, iright);
+                     :}
+
+
+                    
+
+                   | kwIf EXPRESION:c ifLbrace INSTRUCCIONES:b rbrace ELIF:el
+                     {:
+                         RESULT = new IfNode(c, b, el);
+                     :}
+
+                   | kwIf EXPRESION:c ifLbrace INSTRUCCIONES:b rbrace
+                     {:
+                         RESULT = new IfNode(c, b);
+                     :}
+
+                  | kwSwitch:s EXPRESION:e switchLbrace SCOLS CASES:c DEFAULT_CASE:d rbrace
+                     {:
+                         RESULT = new SwitchNode(e, c, d, sleft, sright);
+                     :}
+
+                   | kwSwitch:s EXPRESION:e switchLbrace CASES:c DEFAULT_CASE:d rbrace
+                     {:
+                         RESULT = new SwitchNode(e, c, d, sleft, sright);
+                     :}
+
+                   | kwSwitch:s EXPRESION:e switchLbrace SCOLS CASES:c rbrace
+                     {:
+                         RESULT = new SwitchNode(e, c, null, sleft, sright);
+                     :}
+
+                   | kwSwitch:s EXPRESION:e switchLbrace CASES:c rbrace
+                     {:
+                         RESULT = new SwitchNode(e, c, null, sleft, sright);
+                     :}
+
+                   | kwFor EXPRESION:e forLbrace INSTRUCCIONES:i rbrace
+                     {:
+                         RESULT = new WhileFor(e, i);
+                     :}
+
+                   | kwFor FOR_INIT:init scol EXPRESION:c scol FOR_UPDATE:upd forLbrace INSTRUCCIONES:b rbrace
+                     {:
+                         RESULT = new WhileFor(init, c, upd, b);
+                     :}
+
+                     | kwFor id:idx comma id:val assign kwRange EXPRESION:e forLbrace INSTRUCCIONES:b rbrace
+                     {:
+                         RESULT = new ForRange(idx, val, e, b, idxleft, idxright);
+                     :}
+
+                   | lbrace INSTRUCCIONES:b rbrace
+                     {:
+                         RESULT = new Block(b);
+                     :}
+
+                      | id:n dot id:m lparen rparen scol
+                     {:
+                         RESULT = new MethodCall(
+                             new VarRef(n, nleft, nright),
+                             m,
+                             nleft,
+                             nright
+                         );
+                     :}
+
+                   | id:n dot id:m lparen EXPRESIONES:e rparen scol
+                     {:
+                         RESULT = new MethodCall(
+                             new VarRef(n, nleft, nright),
+                             m,
+                             e,
+                             nleft,
+                             nright
+                         );
+                     :}
+
+                   | id:n lparen rparen scol
+                     {:
+                         RESULT = new FunctionCall(n, nleft, nright);
+                     :}
+
+                   | id:n lparen EXPRESIONES:e rparen scol
+                     {:
+                         RESULT = new FunctionCall(n, e, nleft, nright);
+                     :}   
+
+                   | kwReturn:r EXPRESION:e scol
+                     {:
+                         RESULT = new ReturnStm(e, rleft, rright);
+                     :}
+
+                   | kwReturn:r scol
+                     {:
+                         RESULT = new ReturnStm(null, rleft, rright);
+                     :}
+
+                   | kwBreak:b scol
+                     {:
+                         RESULT = new BreakStm(bleft, bright);
+                     :}
+
+                   | kwContinue:c scol
+                     {:
+                         RESULT = new ContinueStm(cleft, cright);
+                     :}
+;
+
+
+/* =========================
+   ELSE IF / ELSE
+   ========================= */
+
+ELIF ::= ELIF:el kwElse kwIf EXPRESION:e ifLbrace INSTRUCCIONES:i rbrace
+         {:
+             el.add(new ElifNode(e, i));
+             RESULT = el;
+         :}
+
+       | kwElse kwIf EXPRESION:e ifLbrace INSTRUCCIONES:i rbrace
+         {:
+             RESULT = new ElifNodes(new ElifNode(e, i));
+         :}
+
+       | ELIF:el kwElse:els lbrace INSTRUCCIONES:i rbrace
+         {:
+             el.add(new ElifNode(new BoolLiteral(true, elsleft, elsright), i));
+             RESULT = el;
+         :}
+
+       | kwElse:els lbrace INSTRUCCIONES:i rbrace
+         {:
+             RESULT = new ElifNodes(new ElifNode(new BoolLiteral(true, elsleft, elsright), i));
+         :}
+;
+
+
+/* =========================
+   TIPOS
+   ========================= */
+
+TYPE ::= type:t
+         {:
+             RESULT = t;
+         :}
+
+       | id:n
+         {:
+             RESULT = n;
+         :}
+
+       | lbracket rbracket TYPE:t
+         {:
+             RESULT = "[]" + t;
+         :}
+;
+
+
+/* =========================
+   STRUCTS
+   ========================= */
+
+STRUCT_SCOLES ::= STRUCT_SCOLES scol
+                  {:
+                      RESULT = null;
+                  :}
 
                 |
-                  {: RESULT = null; :}
+                  {:
+                      RESULT = null;
+                  :}
 ;
 
-EXPRESION ::= minus EXPRESION:a             {: RESULT = new Negate(a); :}%prec UMENOS
-            | EXPRESION:a plus EXPRESION:b  {: RESULT = new Add(a, b); :}
-            | EXPRESION:a minus EXPRESION:b {: RESULT = new Sub(a, b); :}
-            | EXPRESION:a times EXPRESION:b {: RESULT = new Mul(a, b); :}
-            | EXPRESION:a slash EXPRESION:b {: RESULT = new Div(a, b); :}
-            | EXPRESION:a mod EXPRESION:b          {: RESULT = new Mod(a, b); :} %prec mod
-            | EXPRESION:a equal EXPRESION:b        {: RESULT = new Compare(a, b, "=="); :}
-            | EXPRESION:a notEqual EXPRESION:b     {: RESULT = new Compare(a, b, "!="); :}
-            | EXPRESION:a lowertag EXPRESION:b     {: RESULT = new LowerTag(a, b); :}
-            | EXPRESION:a greatertag EXPRESION:b   {: RESULT = new Compare(a, b, ">"); :}
-            | EXPRESION:a lowerEqual EXPRESION:b   {: RESULT = new Compare(a, b, "<="); :}
-            | EXPRESION:a greaterEqual EXPRESION:b {: RESULT = new Compare(a, b, ">="); :}
-            | EXPRESION:a and EXPRESION:b          {: RESULT = new Logical(a, b, "&&"); :}
-            | EXPRESION:a or EXPRESION:b           {: RESULT = new Logical(a, b, "||"); :}
-            | not EXPRESION:e                      {: RESULT = new Logical(e, null, "!"); :} %prec not
-            | lparen EXPRESION:e rparen     {: RESULT = new Paren(e); :}
-            | kwTrue:t                      {: RESULT = new BoolLiteral(true,  tleft, tright); :}
-            | kwFalse:f                     {: RESULT = new BoolLiteral(false, fleft, fright); :}
-            | kwNil:n                       {: RESULT = new NilLiteral(nleft, nright); :}
-            | fnAtoi:a lparen EXPRESION:e rparen         {: RESULT = new EmbeddedFunction("Atoi", e, aleft, aright); :}
-            | fnParseFloat:p lparen EXPRESION:e rparen   {: RESULT = new EmbeddedFunction("ParseFloat", e, pleft, pright); :}                   
-            | fnTypeOf:t lparen EXPRESION:e rparen TYPEOF_SUFFIX {: RESULT = new EmbeddedFunction("TypeOfString", e, tleft, tright); :}     
-            | id:n                          {: RESULT = new VarRef(n, nleft, nright); :}
-            | integer:e                     {: RESULT = new Integers(new Integer(e), eleft, eright); :}
-            | decimal:e                     {: RESULT = new Decimal(new Double(e),   eleft, eright); :}
-            | string:s                      {: RESULT = new StringLiteral(s,sleft, sright); :}
-            | rune:r                        {: RESULT = new RuneLiteral(r, rleft, rright); :}
+STRUCT_FIELDS ::= STRUCT_FIELDS:l STRUCT_SCOLES STRUCT_FIELD:f
+                  {:
+                      l.add(f);
+                      RESULT = l;
+                  :}
+
+                | STRUCT_FIELD:f
+                  {:
+                      java.util.List<StructField> list = new java.util.ArrayList<>();
+                      list.add(f);
+                      RESULT = list;
+                  :}
+;
+
+STRUCT_FIELD ::= id:n TYPE:t scol
+                 {:
+                     RESULT = new StructField(n, t, nleft, nright);
+                 :}
+;
+
+STRUCT_INITS ::= STRUCT_INITS:l comma STRUCT_SCOLES STRUCT_INIT:i
+                 {:
+                     l.add(i);
+                     RESULT = l;
+                 :}
+
+               | STRUCT_INIT:i
+                 {:
+                     java.util.List<StructFieldInit> list = new java.util.ArrayList<>();
+                     list.add(i);
+                     RESULT = list;
+                 :}
+;
+
+STRUCT_INIT ::= id:n colon EXPRESION:e
+                {:
+                    RESULT = new StructFieldInit(n, e, nleft, nright);
+                :}
+;
+
+
+/* =========================
+   PARAMETROS DE FUNCIONES
+   ========================= */
+
+PARAMS ::= PARAMS:l comma PARAM:p
+           {:
+               l.add(p);
+               RESULT = l;
+           :}
+
+         | PARAM:p
+           {:
+               java.util.List<FunctionParam> list = new java.util.ArrayList<>();
+               list.add(p);
+               RESULT = list;
+           :}
+;
+
+PARAM ::= id:n TYPE:t
+          {:
+              RESULT = new FunctionParam(n, t, nleft, nright);
+          :}
+;
+
+
+/* =========================
+   EXPRESIONES DENTRO DE SLICES
+   ========================= */
+
+SLICE_SCOLES ::= SLICE_SCOLES scol
+                 {:
+                     RESULT = null;
+                 :}
+
+               |
+                 {:
+                     RESULT = null;
+                 :}
+;
+
+SLICE_EXPRESIONES ::= SLICE_EXPRESIONES:l comma SLICE_SCOLES EXPRESION:e
+                      {:
+                          l.add(e);
+                          RESULT = l;
+                      :}
+
+                    | EXPRESION:e
+                      {:
+                          java.util.List<ASTNODE> list = new java.util.ArrayList<>();
+                          list.add(e);
+                          RESULT = list;
+                      :}
+;
+
+
+/* =========================
+   LISTA DE EXPRESIONES
+   ========================= */
+
+EXPRESIONES ::= EXPRESIONES:l comma EXPRESION:e
+                {:
+                    l.add(e);
+                    RESULT = l;
+                :}
+
+              | EXPRESION:e
+                {:
+                    java.util.List<ASTNODE> list = new java.util.ArrayList<>();
+                    list.add(e);
+                    RESULT = list;
+                :}
+;
+
+
+/* =========================
+   REFLECT TYPEOF
+   ========================= */
+
+TYPEOF_SUFFIX ::= fnTypeString lparen rparen
+                  {:
+                      RESULT = null;
+                  :}
+
+                |
+                  {:
+                      RESULT = null;
+                  :}
+;
+
+
+/* =========================
+   EXPRESIONES
+   ========================= */
+
+EXPRESION ::= minus EXPRESION:a
+              {:
+                  RESULT = new Negate(a);
+              :}
+              %prec UMENOS
+
+            | EXPRESION:a plus EXPRESION:b
+              {:
+                  RESULT = new Add(a, b);
+              :}
+
+            | EXPRESION:a minus EXPRESION:b
+              {:
+                  RESULT = new Sub(a, b);
+              :}
+
+            | EXPRESION:a times EXPRESION:b
+              {:
+                  RESULT = new Mul(a, b);
+              :}
+
+            | EXPRESION:a slash EXPRESION:b
+              {:
+                  RESULT = new Div(a, b);
+              :}
+
+            | EXPRESION:a mod EXPRESION:b
+              {:
+                  RESULT = new Mod(a, b);
+              :}
+              %prec mod
+
+            | EXPRESION:a equal EXPRESION:b
+              {:
+                  RESULT = new Compare(a, b, "==");
+              :}
+
+            | EXPRESION:a notEqual EXPRESION:b
+              {:
+                  RESULT = new Compare(a, b, "!=");
+              :}
+
+            | EXPRESION:a lowertag EXPRESION:b
+              {:
+                  RESULT = new LowerTag(a, b);
+              :}
+
+            | EXPRESION:a greatertag EXPRESION:b
+              {:
+                  RESULT = new Compare(a, b, ">");
+              :}
+
+            | EXPRESION:a lowerEqual EXPRESION:b
+              {:
+                  RESULT = new Compare(a, b, "<=");
+              :}
+
+            | EXPRESION:a greaterEqual EXPRESION:b
+              {:
+                  RESULT = new Compare(a, b, ">=");
+              :}
+
+            | EXPRESION:a and EXPRESION:b
+              {:
+                  RESULT = new Logical(a, b, "&&");
+              :}
+
+            | EXPRESION:a or EXPRESION:b
+              {:
+                  RESULT = new Logical(a, b, "||");
+              :}
+
+            | not EXPRESION:e
+              {:
+                  RESULT = new Logical(e, null, "!");
+              :}
+              %prec not
+
+            | lparen EXPRESION:e rparen
+              {:
+                  RESULT = new Paren(e);
+              :}
+
+            | lbracket rbracket TYPE:t lbrace SLICE_SCOLES SLICE_EXPRESIONES:e SLICE_SCOLES rbrace
+              {:
+                  RESULT = new SliceLiteral(t, e, tleft, tright);
+              :}
+
+            | lbracket rbracket TYPE:t lbrace SLICE_SCOLES SLICE_EXPRESIONES:e comma SLICE_SCOLES rbrace
+              {:
+                  RESULT = new SliceLiteral(t, e, tleft, tright);
+              :}
+
+            | lbracket rbracket TYPE:t lbrace SLICE_SCOLES rbrace
+              {:
+                  RESULT = new SliceLiteral(t, new java.util.ArrayList<ASTNODE>(), tleft, tright);
+              :}
+
+            | EXPRESION:s lbracket EXPRESION:i rbracket
+              {:
+                  RESULT = new SliceAccess(s, i, sleft, sright);
+              :}
+
+            | EXPRESION:s dot id:m lparen rparen
+              {:
+                  RESULT = new MethodCall(s, m, sleft, sright);
+              :}
+
+            | EXPRESION:s dot id:m lparen EXPRESIONES:e rparen
+              {:
+                  RESULT = new MethodCall(s, m, e, sleft, sright);
+              :}  
+
+            | EXPRESION:s dot id:f
+              {:
+                  RESULT = new StructAccess(s, f, sleft, sright);
+              :}
+
+            | kwTrue:t
+              {:
+                  RESULT = new BoolLiteral(true, tleft, tright);
+              :}
+
+            | kwFalse:f
+              {:
+                  RESULT = new BoolLiteral(false, fleft, fright);
+              :}
+
+            | kwNil:n
+              {:
+                  RESULT = new NilLiteral(nleft, nright);
+              :}
+
+            | fnAtoi:a lparen EXPRESION:e rparen
+              {:
+                  RESULT = new EmbeddedFunction("Atoi", e, aleft, aright);
+              :}
+
+            | fnParseFloat:p lparen EXPRESION:e rparen
+              {:
+                  RESULT = new EmbeddedFunction("ParseFloat", e, pleft, pright);
+              :}
+
+            | fnLen:l lparen EXPRESION:e rparen
+              {:
+                  RESULT = new EmbeddedFunction("Len", e, lleft, lright);
+              :}
+
+            | fnAppend:a lparen EXPRESION:s comma EXPRESION:v rparen
+              {:
+                  RESULT = new AppendFunction(s, v, aleft, aright);
+              :}
+
+            | fnSlicesIndex:s lparen EXPRESION:slice comma EXPRESION:value rparen
+              {:
+                  RESULT = new SlicesIndexFunction(slice, value, sleft, sright);
+              :}  
+
+            | fnStringsJoin:j lparen EXPRESION:slice comma EXPRESION:sep rparen
+              {:
+                  RESULT = new StringsJoinFunction(slice, sep, jleft, jright);
+              :}  
+
+            | fnTypeOf:t lparen EXPRESION:e rparen TYPEOF_SUFFIX
+              {:
+                  RESULT = new EmbeddedFunction("TypeOfString", e, tleft, tright);
+              :}
+
+            | id:n lbrace STRUCT_SCOLES STRUCT_INITS:i STRUCT_SCOLES rbrace
+              {:
+                  RESULT = new StructLiteral(n, i, nleft, nright);
+              :}
+
+            | id:n lbrace STRUCT_SCOLES rbrace
+              {:
+                  RESULT = new StructLiteral(n, new java.util.ArrayList<StructFieldInit>(), nleft, nright);
+              :}
+
+            | id:n lparen rparen
+              {:
+                  RESULT = new FunctionCall(n, nleft, nright);
+              :}
+
+            | id:n lparen EXPRESIONES:e rparen
+              {:
+                  RESULT = new FunctionCall(n, e, nleft, nright);
+              :}
+
+            | id:n
+              {:
+                  RESULT = new VarRef(n, nleft, nright);
+              :}
+
+            | integer:e
+              {:
+                  RESULT = new Integers(new Integer(e), eleft, eright);
+              :}
+
+            | decimal:e
+              {:
+                  RESULT = new Decimal(new Double(e), eleft, eright);
+              :}
+
+            | string:s
+              {:
+                  RESULT = new StringLiteral(s, sleft, sright);
+              :}
+
+            | rune:r
+              {:
+                  RESULT = new RuneLiteral(r, rleft, rright);
+              :}
 ;

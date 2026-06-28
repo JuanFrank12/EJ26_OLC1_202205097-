@@ -8,55 +8,74 @@ package analisis;
 /** CUP generated interface containing symbol constants. */
 public interface sym {
   /* terminals */
-  public static final int slash = 14;
-  public static final int kwFor = 46;
-  public static final int minusAssign = 21;
-  public static final int plusAssign = 20;
-  public static final int plus = 11;
-  public static final int mod = 15;
-  public static final int imprimir = 26;
+  public static final int slash = 19;
+  public static final int forLbrace = 15;
+  public static final int kwFor = 48;
+  public static final int minusAssign = 26;
+  public static final int lbracket = 11;
+  public static final int kwReturn = 51;
+  public static final int ifLbrace = 13;
+  public static final int plusAssign = 25;
+  public static final int plus = 16;
+  public static final int kwDefault = 56;
+  public static final int mod = 20;
+  public static final int imprimir = 32;
   public static final int lbrace = 9;
-  public static final int kwNil = 49;
-  public static final int lowertag = 37;
-  public static final int minus = 12;
+  public static final int kwNil = 52;
+  public static final int lowertag = 60;
+  public static final int minus = 17;
   public static final int rbrace = 10;
-  public static final int kwFalse = 33;
-  public static final int kwIf = 34;
-  public static final int comma = 24;
+  public static final int kwSwitch = 54;
+  public static final int kwFalse = 43;
+  public static final int kwIf = 44;
+  public static final int comma = 29;
   public static final int string = 2;
-  public static final int lowerEqual = 39;
+  public static final int lowerEqual = 62;
   public static final int rune = 5;
-  public static final int fmtPrintln = 27;
-  public static final int scol = 17;
-  public static final int equal = 41;
-  public static final int UMENOS = 16;
-  public static final int fnAtoi = 28;
+  public static final int fmtPrintln = 33;
+  public static final int fnLen = 38;
+  public static final int kwCase = 55;
+  public static final int scol = 22;
+  public static final int equal = 64;
+  public static final int UMENOS = 21;
+  public static final int fnAtoi = 34;
+  public static final int kwStruct = 58;
+  public static final int fnAppend = 39;
   public static final int EOF = 0;
+  public static final int kwType = 57;
+  public static final int rbracket = 12;
   public static final int error = 1;
-  public static final int times = 13;
-  public static final int kwContinue = 48;
-  public static final int or = 44;
+  public static final int times = 18;
+  public static final int or = 67;
+  public static final int kwContinue = 50;
   public static final int lparen = 7;
+  public static final int colon = 30;
+  public static final int kwRange = 53;
   public static final int integer = 3;
   public static final int rparen = 8;
-  public static final int id = 25;
-  public static final int kwTrue = 32;
-  public static final int fnParseFloat = 29;
-  public static final int increment = 22;
-  public static final int kwVar = 36;
-  public static final int fnTypeString = 31;
-  public static final int not = 45;
-  public static final int and = 43;
-  public static final int assign = 18;
-  public static final int kwElse = 35;
-  public static final int decrement = 23;
-  public static final int notEqual = 42;
-  public static final int greaterEqual = 40;
-  public static final int alllocate = 19;
-  public static final int fnTypeOf = 30;
-  public static final int kwBreak = 47;
-  public static final int greatertag = 38;
+  public static final int id = 31;
+  public static final int kwTrue = 42;
+  public static final int fnParseFloat = 35;
+  public static final int increment = 27;
+  public static final int kwVar = 46;
+  public static final int fnTypeString = 37;
+  public static final int switchLbrace = 14;
+  public static final int not = 68;
+  public static final int and = 66;
+  public static final int assign = 23;
+  public static final int kwElse = 45;
+  public static final int fnSlicesIndex = 40;
+  public static final int decrement = 28;
+  public static final int kwFunc = 47;
+  public static final int notEqual = 65;
+  public static final int greaterEqual = 63;
+  public static final int alllocate = 24;
+  public static final int fnTypeOf = 36;
+  public static final int kwBreak = 49;
+  public static final int fnStringsJoin = 41;
+  public static final int greatertag = 61;
   public static final int decimal = 4;
+  public static final int dot = 59;
   public static final int type = 6;
   public static final String[] terminalNames = new String[] {
   "EOF",
@@ -70,6 +89,11 @@ public interface sym {
   "rparen",
   "lbrace",
   "rbrace",
+  "lbracket",
+  "rbracket",
+  "ifLbrace",
+  "switchLbrace",
+  "forLbrace",
   "plus",
   "minus",
   "times",
@@ -84,6 +108,7 @@ public interface sym {
   "increment",
   "decrement",
   "comma",
+  "colon",
   "id",
   "imprimir",
   "fmtPrintln",
@@ -91,11 +116,28 @@ public interface sym {
   "fnParseFloat",
   "fnTypeOf",
   "fnTypeString",
+  "fnLen",
+  "fnAppend",
+  "fnSlicesIndex",
+  "fnStringsJoin",
   "kwTrue",
   "kwFalse",
   "kwIf",
   "kwElse",
   "kwVar",
+  "kwFunc",
+  "kwFor",
+  "kwBreak",
+  "kwContinue",
+  "kwReturn",
+  "kwNil",
+  "kwRange",
+  "kwSwitch",
+  "kwCase",
+  "kwDefault",
+  "kwType",
+  "kwStruct",
+  "dot",
   "lowertag",
   "greatertag",
   "lowerEqual",
@@ -104,11 +146,7 @@ public interface sym {
   "notEqual",
   "and",
   "or",
-  "not",
-  "kwFor",
-  "kwBreak",
-  "kwContinue",
-  "kwNil"
+  "not"
   };
 }
 

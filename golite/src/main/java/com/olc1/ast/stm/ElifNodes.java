@@ -1,14 +1,15 @@
 package com.olc1.ast.stm;
+
 import java.util.List;
 import java.util.ArrayList;
 
 import com.olc1.ast.ASTNODE;
 import com.olc1.visitor.Visitor;
 
-
 public class ElifNodes implements ASTNODE {
-    // Lista de else if: [ElifNode, ElifNode, ...]
-    private final java.util.List<ElifNode> elifNodesList;
+    // Lista de else if / else
+    private final List<ElifNode> elifNodesList;
+
     public Context ctx;
 
     public ElifNodes(ElifNode first) {
@@ -19,6 +20,11 @@ public class ElifNodes implements ASTNODE {
 
     public void add(ElifNode node) {
         this.elifNodesList.add(node);
+    }
+
+    // ESTE ES EL GETTER NUEVO IMPORTANTE
+    public List<ElifNode> getElifNodesList() {
+        return this.elifNodesList;
     }
 
     public class Context {

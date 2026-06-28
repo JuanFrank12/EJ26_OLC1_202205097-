@@ -9,11 +9,19 @@ import java.awt.event.MouseEvent;
 public class GoliteMenuBar extends JMenuBar {
     private final JMenuItem newItem;
     private final JMenuItem loadItem;
+    private final JMenuItem saveItem;
+    private final JMenuItem saveAsItem;
     private final JMenuItem exitItem;
+
     private final JButton runButton;
     private final JButton cleanButton;
+
     private final JMenuItem tokensItem;
     private final JMenuItem errorsItem;
+
+    // NUEVO: item para tabla de símbolos
+    private final JMenuItem symbolsItem;
+
     private final JMenuItem aboutItem;
 
     public GoliteMenuBar() {
@@ -25,17 +33,29 @@ public class GoliteMenuBar extends JMenuBar {
 
         newItem = new JMenuItem("Nuevo");
         loadItem = new JMenuItem("Cargar archivo .GLT");
+        saveItem = new JMenuItem("Guardar");
+        saveAsItem = new JMenuItem("Guardar como");
         exitItem = new JMenuItem("Salir");
 
         fileMenu.add(newItem);
         fileMenu.add(loadItem);
         fileMenu.addSeparator();
+        fileMenu.add(saveItem);
+        fileMenu.add(saveAsItem);
+        fileMenu.addSeparator();
         fileMenu.add(exitItem);
 
         tokensItem = new JMenuItem("Reporte de tokens");
         errorsItem = new JMenuItem("Reporte de errores");
+
+        // NUEVO
+        symbolsItem = new JMenuItem("Tabla de símbolos");
+
         reportMenu.add(tokensItem);
         reportMenu.add(errorsItem);
+
+        // NUEVO
+        reportMenu.add(symbolsItem);
 
         aboutItem = new JMenuItem("Acerca de");
         helpMenu.add(aboutItem);
@@ -47,14 +67,20 @@ public class GoliteMenuBar extends JMenuBar {
         add(helpMenu);
     }
 
-    public void onRun(ActionListener l)    { runButton.addActionListener(l); }
-    public void onClean(ActionListener l)  { cleanButton.addActionListener(l); }
-    public void onNew(ActionListener l)    { newItem.addActionListener(l); }
-    public void onLoad(ActionListener l)   { loadItem.addActionListener(l); }
-    public void onExit(ActionListener l)   { exitItem.addActionListener(l); }
-    public void onTokens(ActionListener l) { tokensItem.addActionListener(l); }
-    public void onErrors(ActionListener l) { errorsItem.addActionListener(l); }
-    public void onAbout(ActionListener l)  { aboutItem.addActionListener(l); }
+    public void onRun(ActionListener l)     { runButton.addActionListener(l); }
+    public void onClean(ActionListener l)   { cleanButton.addActionListener(l); }
+    public void onNew(ActionListener l)     { newItem.addActionListener(l); }
+    public void onLoad(ActionListener l)    { loadItem.addActionListener(l); }
+    public void onSave(ActionListener l)    { saveItem.addActionListener(l); }
+    public void onSaveAs(ActionListener l)  { saveAsItem.addActionListener(l); }
+    public void onExit(ActionListener l)    { exitItem.addActionListener(l); }
+    public void onTokens(ActionListener l)  { tokensItem.addActionListener(l); }
+    public void onErrors(ActionListener l)  { errorsItem.addActionListener(l); }
+
+    // NUEVO: acción para tabla de símbolos
+    public void onSymbols(ActionListener l) { symbolsItem.addActionListener(l); }
+
+    public void onAbout(ActionListener l)   { aboutItem.addActionListener(l); }
 
     private static JButton createButton(String text) {
         JButton button = new JButton(text);

@@ -21,6 +21,7 @@ import com.olc1.ast.stm.Statments;
 import com.olc1.ast.stm.WhileFor;
 import com.olc1.ast.stm.ElifNode;
 import com.olc1.ast.stm.ElifNodes;
+import com.olc1.ast.stm.ForRange;
 import com.olc1.ast.exp.NilLiteral;
 import com.olc1.ast.stm.Block;
 import com.olc1.ast.exp.Mod;
@@ -30,6 +31,27 @@ import com.olc1.ast.stm.ContinueStm;
 import com.olc1.ast.stm.VarDecl;
 import com.olc1.ast.exp.RuneLiteral;
 import com.olc1.ast.exp.EmbeddedFunction;
+import com.olc1.ast.stm.MainFunction;
+import com.olc1.ast.stm.SwitchNode;
+import com.olc1.ast.stm.ReturnStm;
+import com.olc1.ast.stm.FunctionDecl;
+import com.olc1.ast.exp.FunctionCall;
+import com.olc1.ast.exp.SliceLiteral;
+import com.olc1.ast.exp.SliceAccess;
+import com.olc1.ast.stm.SliceAssign;
+import com.olc1.ast.exp.AppendFunction;
+import com.olc1.ast.exp.SlicesIndexFunction;
+import com.olc1.ast.exp.StringsJoinFunction;
+import com.olc1.ast.stm.StructTypeDecl;
+import com.olc1.ast.exp.StructLiteral;
+import com.olc1.ast.exp.StructAccess;
+import com.olc1.ast.stm.StructAssign;
+import com.olc1.ast.stm.MethodDecl;
+import com.olc1.ast.exp.MethodCall;
+import com.olc1.ast.stm.ForRange;
+
+
+
 
 
 
@@ -70,5 +92,23 @@ public interface Visitor<T> {
     T visit(VarDecl.Context ctx);
     T visit(RuneLiteral.Context ctx);
     T visit(EmbeddedFunction.Context ctx);
+    T visit(MainFunction.Context ctx);
+    T visit(SwitchNode.Context ctx);
+    T visit(ReturnStm.Context ctx);
+    T visit(FunctionDecl.Context ctx);
+    T visit(FunctionCall.Context ctx);
+    T visit(SliceLiteral.Context ctx);
+    T visit(SliceAccess.Context ctx);
+    T visit(SliceAssign.Context ctx);
+    T visit(AppendFunction.Context ctx);
+    T visit(SlicesIndexFunction.Context ctx);
+    T visit(StringsJoinFunction.Context ctx);
+    T visit(StructTypeDecl.Context ctx);
+    T visit(StructLiteral.Context ctx);
+    T visit(StructAccess.Context ctx);
+    T visit(StructAssign.Context ctx);
+    T visit(MethodDecl.Context ctx);
+    T visit(MethodCall.Context ctx);
+    T visit(ForRange.Context ctx);
 
 }

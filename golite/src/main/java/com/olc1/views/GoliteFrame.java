@@ -25,6 +25,7 @@ import com.olc1.ast.ASTNODE;
 import com.olc1.ast.stm.Statments;
 import com.olc1.reports.GoliteError;
 import com.olc1.reports.TokenReport;
+import com.olc1.reports.SymbolReport;
 import com.olc1.visitor.interpreter.InterpreterVisitor;
 
 public class GoliteFrame extends JFrame {
@@ -34,6 +35,11 @@ public class GoliteFrame extends JFrame {
     private Lexer lexer;
     private parser parser;
     InterpreterVisitor interpreter;
+
+    private File currentFile = null;
+
+    // Lista actual para el reporte de tabla de símbolos
+    private List<SymbolReport> currentSymbols = new ArrayList<>();
 
     public GoliteFrame() {
         setTitle("Golite");
@@ -57,29 +63,42 @@ public class GoliteFrame extends JFrame {
     }
 
     private void wireActions(GoliteMenuBar menuBar) {
-    menuBar.onRun(e -> run());
-    menuBar.onClean(e -> cleanConsole());
+        menuBar.onRun(e -> run());
+        menuBar.onClean(e -> cleanConsole());
 
-    menuBar.onNew(e -> {
-        editorPanel.setText("");
-        cleanConsole();
-    });
+        menuBar.onNew(e -> {
+            editorPanel.setText("");
+            currentFile = null;
+            currentSymbols = new ArrayList<>();
+            lexer = null;
+            parser = null;
+            interpreter = null;
+            setTitle("Golite");
+            cleanConsole();
+        });
 
-    menuBar.onLoad(e -> loadGLTFile());
-    menuBar.onExit(e -> System.exit(0));
+        menuBar.onLoad(e -> loadGLTFile());
+        menuBar.onSave(e -> saveGLTFile());
+        menuBar.onSaveAs(e -> saveAsGLTFile());
+        menuBar.onExit(e -> System.exit(0));
 
-    menuBar.onTokens(e -> tokens());
-    menuBar.onErrors(e -> errors());
+        menuBar.onTokens(e -> tokens());
+        menuBar.onErrors(e -> errors());
 
-    menuBar.onAbout(e -> JOptionPane.showMessageDialog(
-            this,
-            "GoLite\nVersión 1.0.0\nLaboratorio OLC1",
-            "Acerca de",
-            JOptionPane.INFORMATION_MESSAGE));
-}
+        // NUEVO: reporte de tabla de símbolos
+        menuBar.onSymbols(e -> symbols());
+
+        menuBar.onAbout(e -> JOptionPane.showMessageDialog(
+                this,
+                "GoLite\nVersión 1.0.0\nLaboratorio OLC1",
+                "Acerca de",
+                JOptionPane.INFORMATION_MESSAGE));
+    }
 
     private void run() {
         try {
+            currentSymbols = new ArrayList<>();
+
             lexer = new Lexer(new BufferedReader(new StringReader(editorPanel.getText())));
             parser = new parser(lexer);
 
@@ -109,6 +128,9 @@ public class GoliteFrame extends JFrame {
 
             interpreter = new InterpreterVisitor();
             interpreter.Visit(ast);
+
+            // NUEVO: guardamos los símbolos generados por el intérprete
+            currentSymbols = new ArrayList<>(interpreter.symbols);
 
             cleanConsole();
             consoleTextArea.append(interpreter.output);
@@ -146,6 +168,10 @@ public class GoliteFrame extends JFrame {
                 );
 
                 editorPanel.setText(content);
+
+                currentFile = selectedFile;
+                setTitle("Golite - " + selectedFile.getName());
+
                 cleanConsole();
 
                 consoleTextArea.append("Archivo cargado correctamente:\n");
@@ -159,6 +185,68 @@ public class GoliteFrame extends JFrame {
                         JOptionPane.ERROR_MESSAGE
                 );
             }
+        }
+
+        editorPanel.getTextArea().requestFocus();
+    }
+
+    private void saveGLTFile() {
+        if (currentFile == null) {
+            saveAsGLTFile();
+            return;
+        }
+
+        saveContentToFile(currentFile);
+    }
+
+    private void saveAsGLTFile() {
+        JFileChooser fileChooser = new JFileChooser();
+
+        FileNameExtensionFilter filter = new FileNameExtensionFilter(
+                "Archivos GoLite (*.glt, *.GLT)",
+                "glt",
+                "GLT"
+        );
+
+        fileChooser.setFileFilter(filter);
+        fileChooser.setDialogTitle("Guardar archivo .GLT");
+
+        int result = fileChooser.showSaveDialog(this);
+
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+
+            if (!selectedFile.getName().toLowerCase().endsWith(".glt")) {
+                selectedFile = new File(selectedFile.getAbsolutePath() + ".glt");
+            }
+
+            currentFile = selectedFile;
+            saveContentToFile(currentFile);
+            setTitle("Golite - " + currentFile.getName());
+        }
+
+        editorPanel.getTextArea().requestFocus();
+    }
+
+    private void saveContentToFile(File file) {
+        try {
+            Files.writeString(
+                    file.toPath(),
+                    editorPanel.getText(),
+                    StandardCharsets.UTF_8
+            );
+
+            cleanConsole();
+            consoleTextArea.append("Archivo guardado correctamente:\n");
+            consoleTextArea.append(file.getAbsolutePath() + "\n");
+
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se pudo guardar el archivo:\n" + ex.getMessage(),
+                    "Error al guardar archivo",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
 
         editorPanel.getTextArea().requestFocus();
@@ -283,6 +371,60 @@ public class GoliteFrame extends JFrame {
 
         new ReportWindow(
                 "Tabla de Tokens",
+                columnas,
+                datos
+        ).setVisible(true);
+    }
+
+    // NUEVO: reporte de tabla de símbolos
+    private void symbols() {
+        if (lexer == null || parser == null || interpreter == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Aún no se ha ejecutado nada.",
+                    "Reporte de Tabla de Símbolos",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        String[] columnas = {
+                "ID",
+                "Tipo símbolo",
+                "Tipo dato",
+                "Ámbito",
+                "Línea",
+                "Columna"
+        };
+
+        List<Object[]> filas = new ArrayList<>();
+
+        for (SymbolReport symbol : currentSymbols) {
+            filas.add(new Object[]{
+                    symbol.getId(),
+                    symbol.getSymbolType(),
+                    symbol.getDataType(),
+                    symbol.getScope(),
+                    symbol.getLine(),
+                    symbol.getColumn()
+            });
+        }
+
+        if (filas.isEmpty()) {
+            filas.add(new Object[]{
+                    "No hay símbolos registrados.",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-"
+            });
+        }
+
+        Object[][] datos = filas.toArray(new Object[0][]);
+
+        new ReportWindow(
+                "Reporte de Tabla de Símbolos",
                 columnas,
                 datos
         ).setVisible(true);

@@ -2,18 +2,25 @@ package com.olc1.visitor.interpreter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.LinkedHashMap;
 
 import com.olc1.ast.ASTNODE;
 import com.olc1.ast.exp.*;
 import com.olc1.ast.stm.*;
 import com.olc1.reports.GoliteError;
+import com.olc1.reports.SymbolReport;
 import com.olc1.visitor.Visitor;
 import com.olc1.visitor.interpreter.value.*;
 import com.olc1.visitor.interpreter.transfer.BreakException;
 import com.olc1.visitor.interpreter.transfer.ContinueException;
-import com.olc1.visitor.interpreter.value.RuneValue;
+import com.olc1.visitor.interpreter.transfer.ReturnException;
+import com.olc1.visitor.interpreter.transfer.BreakException;
+import com.olc1.visitor.interpreter.transfer.ContinueException;
+
 
 
 public class InterpreterVisitor implements Visitor<ValueWrapper> {
@@ -21,7 +28,15 @@ public class InterpreterVisitor implements Visitor<ValueWrapper> {
     private final ValueWrapper defaultVoid = new VoidValue(-1, -1);
     private Enviroment enviroment = new Enviroment();
     private int loopDepth = 0;
+    private int switchDepth = 0;
+    private final Map<String, FunctionDecl.Context> functions = new HashMap<>();
+    private final Map<String, StructTypeDecl.Context> structTypes = new HashMap<>();
+    private int statmentsDepth = 0;
+    private final Map<String, MethodDecl.Context> methods = new HashMap<>();
     public final List<GoliteError> errors = new ArrayList<>();
+    public final List<SymbolReport> symbols = new ArrayList<>();
+    private final Set<String> symbolKeys = new HashSet<>();
+    private String currentScope = "Global";
 
     private void executeInNewScope(ASTNODE body) {
     Enviroment previous = this.enviroment;
@@ -35,8 +50,46 @@ public class InterpreterVisitor implements Visitor<ValueWrapper> {
 }
 
     public ValueWrapper Visit(ASTNODE node) {
-        return node.accept(this);
+    if (node == null) {
+        return defaultVoid;
     }
+
+    try {
+        return node.accept(this);
+
+    } catch (BreakException e) {
+        throw e;
+
+    } catch (ContinueException e) {
+        throw e;
+
+    } catch (ReturnException e) {
+        throw e;
+
+    } catch (RuntimeException e) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Error semantico no soportado capturado: " + e.getMessage(),
+                -1,
+                -1
+            )
+        );
+
+        return defaultVoid;
+    }
+}
+
+@Override
+public ValueWrapper visit(ReturnStm.Context ctx) {
+    ValueWrapper value = defaultVoid;
+
+    if (ctx.expression != null) {
+        value = Visit(ctx.expression);
+    }
+
+    throw new ReturnException(value);
+}
 
     @Override
     public ValueWrapper visit(Integers.Context ctx) {
@@ -122,6 +175,255 @@ public ValueWrapper visit(Add.Context ctx) {
             default -> throw new RuntimeException("Operacion invalida: " + left.getTypeName() + " * " + right.getTypeName());
         };
     }
+
+
+    @Override
+public ValueWrapper visit(MethodDecl.Context ctx) {
+
+    if (statmentsDepth > 1) {
+    this.errors.add(
+        new GoliteError(
+            "Semantico",
+            "El metodo '" + ctx.methodName + "' solo puede declararse en el ambito global",
+            ctx.line,
+            ctx.column
+        )
+    );
+
+    return defaultVoid;
+}
+
+    String key = ctx.receiverType + "." + ctx.methodName;
+
+    if (!structTypes.containsKey(ctx.receiverType)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "No se puede declarar metodo para el struct '" + ctx.receiverType + "' porque no existe",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (methods.containsKey(key)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El metodo '" + ctx.methodName + "' ya fue declarado para el struct '" + ctx.receiverType + "'",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    Set<String> paramNames = new HashSet<>();
+
+    for (FunctionParam param : ctx.params) {
+        if (paramNames.contains(param.name)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El parametro '" + param.name + "' esta repetido en el metodo '" + ctx.methodName + "'",
+                    param.line,
+                    param.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        if (param.name.equals(ctx.receiverName)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El parametro '" + param.name + "' no puede tener el mismo nombre que el receiver del metodo",
+                    param.line,
+                    param.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        if (!isValidDeclaredType(param.type)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "Tipo no reconocido en parametro '" + param.name + "': " + param.type,
+                    param.line,
+                    param.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        paramNames.add(param.name);
+    }
+    String methodType = ctx.returnType == null ? "void" : ctx.returnType;
+String methodScope = ctx.receiverType + "." + ctx.methodName;
+
+addSymbol(ctx.methodName, "Metodo", methodType, "Global", ctx.line, ctx.column);
+addSymbol(ctx.receiverName, "Receiver", ctx.receiverType, methodScope, ctx.line, ctx.column);
+
+for (FunctionParam param : ctx.params) {
+    addSymbol(param.name, "Parametro", param.type, methodScope, param.line, param.column);
+}
+    methods.put(key, ctx);
+    return defaultVoid;
+}
+
+@Override
+public ValueWrapper visit(MethodCall.Context ctx) {
+    ValueWrapper targetValue = Visit(ctx.target);
+
+    if (!(targetValue instanceof StructValue structValue)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Solo se pueden llamar metodos desde un struct",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    String key = structValue.structName() + "." + ctx.methodName;
+    MethodDecl.Context method = methods.get(key);
+
+    if (method == null) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El struct '" + structValue.structName()
+                + "' no tiene el metodo '" + ctx.methodName + "'",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (ctx.arguments.size() != method.params.size()) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El metodo '" + ctx.methodName + "' esperaba "
+                + method.params.size() + " argumentos, pero recibio "
+                + ctx.arguments.size(),
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    java.util.List<ValueWrapper> argumentValues = new java.util.ArrayList<>();
+
+    for (ASTNODE argument : ctx.arguments) {
+        argumentValues.add(Visit(argument));
+    }
+
+    Enviroment previous = this.enviroment;
+    String previousScope = this.currentScope;
+
+    try {
+        this.enviroment = new Enviroment(previous);
+        this.currentScope = structValue.structName() + "." + ctx.methodName;
+
+        // Receiver: func (p Persona) cambiarNombre(...)
+        // IMPORTANTE: sin .copy(), para que el metodo modifique el struct real
+        this.enviroment.declare(method.receiverName, structValue);
+
+        // Parametros del metodo
+        for (int i = 0; i < method.params.size(); i++) {
+            FunctionParam param = method.params.get(i);
+            ValueWrapper argumentValue = argumentValues.get(i);
+
+            if (!isParameterTypeCompatible(param.type, argumentValue)) {
+                this.errors.add(
+                    new GoliteError(
+                        "Semantico",
+                        "El parametro '" + param.name + "' del metodo '" + ctx.methodName
+                        + "' esperaba tipo '" + param.type
+                        + "' pero recibio '" + argumentValue.getTypeName() + "'",
+                        param.line,
+                        param.column
+                    )
+                );
+
+                return defaultVoid;
+            }
+
+            ValueWrapper valueToDeclare = convertParameterValue(param.type, argumentValue);
+            this.enviroment.declare(param.name, valueToDeclare);
+        }
+
+        Visit(method.body);
+
+        if (method.returnType != null) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El metodo '" + ctx.methodName
+                    + "' debe retornar un valor de tipo '" + method.returnType + "'",
+                    ctx.line,
+                    ctx.column
+                )
+            );
+        }
+
+        return defaultVoid;
+
+    } catch (ReturnException e) {
+        ValueWrapper returnedValue = e.getValue();
+
+        if (method.returnType == null) {
+            if (!returnedValue.getTypeName().equals("void")) {
+                this.errors.add(
+                    new GoliteError(
+                        "Semantico",
+                        "El metodo '" + ctx.methodName + "' no debe retornar valor",
+                        ctx.line,
+                        ctx.column
+                    )
+                );
+            }
+
+            return defaultVoid;
+        }
+
+        if (!isReturnTypeCompatible(method.returnType, returnedValue)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El metodo '" + ctx.methodName + "' debe retornar '"
+                    + method.returnType + "' pero retorno '"
+                    + returnedValue.getTypeName() + "'",
+                    ctx.line,
+                    ctx.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        return returnedValue;
+
+    } finally {
+    this.enviroment = previous;
+    this.currentScope = previousScope;
+}
+}
 
     @Override
 public ValueWrapper visit(Div.Context ctx) {
@@ -251,14 +553,77 @@ public ValueWrapper visit(Imprimir.Context ctx) {
     return defaultVoid;
 }
 
-    @Override
-    public ValueWrapper visit(Statments.Context ctx) {
-        for (ASTNODE statment : ctx.statements) {
-            Visit(statment);
+@Override
+public ValueWrapper visit(Statments.Context ctx) {
+    boolean isTopLevel = statmentsDepth == 0;
+    statmentsDepth++;
+
+    try {
+        if (isTopLevel) {
+            MainFunction mainFunction = null;
+
+            // 1. Primero registramos structs globales
+            for (ASTNODE statement : ctx.statements) {
+                if (statement instanceof StructTypeDecl) {
+                    Visit(statement);
+                }
+            }
+
+            // 2. Luego registramos metodos, funciones y buscamos main
+            for (ASTNODE statement : ctx.statements) {
+                if (statement instanceof MethodDecl) {
+                    Visit(statement);
+                } else if (statement instanceof FunctionDecl) {
+                    Visit(statement);
+                } else if (statement instanceof MainFunction main) {
+                    mainFunction = main;
+                }
+            }
+
+            // Si ya hubo errores al registrar structs, funciones o métodos,
+            // NO ejecutamos main ni codigo suelto.
+            if (!this.errors.isEmpty()) {
+                return defaultVoid;
+            }
+
+            // 3. Si existe main, se ejecuta solo main
+            if (mainFunction != null) {
+                return Visit(mainFunction);
+            }
+
+            // 4. Compatibilidad: si no hay main, ejecuta codigo suelto
+            for (ASTNODE statement : ctx.statements) {
+                if (!(statement instanceof StructTypeDecl)
+                        && !(statement instanceof MethodDecl)
+                        && !(statement instanceof FunctionDecl)
+                        && !(statement instanceof MainFunction)) {
+                    Visit(statement);
+
+                    if (!this.errors.isEmpty()) {
+                        return defaultVoid;
+                    }
+                }
+            }
+
+            return defaultVoid;
+        }
+
+        // Si NO estamos en nivel global, ejecutamos normal.
+        // Las declaraciones globales inválidas se validan dentro de sus propios visitors.
+        for (ASTNODE statement : ctx.statements) {
+            Visit(statement);
+
+            if (!this.errors.isEmpty()) {
+                return defaultVoid;
+            }
         }
 
         return defaultVoid;
+
+    } finally {
+        statmentsDepth--;
     }
+}
 
     @Override
 public ValueWrapper visit(Block.Context ctx) {
@@ -309,6 +674,10 @@ public ValueWrapper visit(Block.Context ctx) {
 
         try{
             enviroment.declare(ctx.name, val);
+
+if (!(val instanceof VoidValue)) {
+    addSymbol(ctx.name, "Variable", val.getTypeName(), currentScope, ctx.line, ctx.column);
+}
         } catch (RuntimeException e) {
             this.errors.add(
                 new GoliteError(
@@ -321,36 +690,73 @@ public ValueWrapper visit(Block.Context ctx) {
     }
 
     @Override
-    public ValueWrapper visit(IfNode.Context ctx) {
-        Enviroment parentEnv = this.enviroment;
-        ValueWrapper cond = Visit(ctx.condition);
+public ValueWrapper visit(IfNode.Context ctx) {
+    Enviroment parentEnv = this.enviroment;
 
-        if (cond instanceof BoolValue b && b.value()) {
-            this.enviroment = new Enviroment(parentEnv);
-            Visit(ctx.body);
-            this.enviroment = parentEnv;
-            return defaultVoid;
-        }
+    ValueWrapper cond = Visit(ctx.condition);
 
-        ElifNodes elifList = ctx.elifList;
-        if(elifList != null){
-            Visit(elifList);
+    if (!(cond instanceof BoolValue b)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "La condicion del if debe ser booleana",
+                cond.line(),
+                cond.column()
+            )
+        );
 
-            for (ElifNode elif: elifList.ctx.elifNodesList){
-                Visit(elif);
-                ValueWrapper elifCondition = Visit(elif.ctx.condition);
-
-                if (elifCondition instanceof BoolValue eb && eb.value()){
-                    this.enviroment = new Enviroment(parentEnv);
-                    Visit(elif.ctx.body);
-                    this.enviroment = parentEnv;
-                    return defaultVoid;
-                }
-            }
-        }
         return defaultVoid;
-    } 
-    
+    }
+
+    if (b.value()) {
+        this.enviroment = new Enviroment(parentEnv);
+
+        try {
+            Visit(ctx.body);
+        } finally {
+            this.enviroment = parentEnv;
+        }
+
+        return defaultVoid;
+    }
+
+    ElifNodes elifList = ctx.elifList;
+
+    if (elifList != null) {
+        for (ElifNode elif : elifList.getElifNodesList()) {
+    Visit(elif);
+
+    ValueWrapper elifCondition = Visit(elif.ctx.condition);
+
+    if (!(elifCondition instanceof BoolValue eb)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "La condicion del else if debe ser booleana",
+                elifCondition.line(),
+                elifCondition.column()
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (eb.value()) {
+        this.enviroment = new Enviroment(parentEnv);
+
+        try {
+            Visit(elif.ctx.body);
+        } finally {
+            this.enviroment = parentEnv;
+        }
+
+        return defaultVoid;
+    }
+}
+    }
+
+    return defaultVoid;
+}
     
 
 
@@ -449,6 +855,19 @@ public ValueWrapper visit(WhileFor.Context ctx) {
 public ValueWrapper visit(VarDecl.Context ctx) {
     ValueWrapper value;
 
+    if (!isValidDeclaredType(ctx.type)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Tipo no reconocido: " + ctx.type,
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
     if (ctx.value == null) {
         value = defaultValueForType(ctx.type, ctx.line, ctx.column);
     } else {
@@ -462,6 +881,10 @@ public ValueWrapper visit(VarDecl.Context ctx) {
 
     try {
         enviroment.declare(ctx.name, value);
+
+if (!(value instanceof VoidValue)) {
+    addSymbol(ctx.name, "Variable", ctx.type, currentScope, ctx.line, ctx.column);
+}
     } catch (RuntimeException e) {
         this.errors.add(
             new GoliteError(
@@ -476,40 +899,145 @@ public ValueWrapper visit(VarDecl.Context ctx) {
     return defaultVoid;
 }
 
+
+@Override
+public ValueWrapper visit(ForRange.Context ctx) {
+    ValueWrapper iterableValue = Visit(ctx.iterable);
+
+    if (!(iterableValue instanceof SliceValue)) {
+        this.errors.add(new GoliteError(
+            "Semantico",
+            "La expresion usada en range debe ser un slice, se obtuvo: " + iterableValue.getTypeName(),
+            ctx.line,
+            ctx.column
+        ));
+        return defaultVoid;
+    }
+
+    SliceValue slice = (SliceValue) iterableValue;
+
+    addSymbol(ctx.indexName, "Variable", "int", currentScope, ctx.line, ctx.column);
+    addSymbol(ctx.valueName, "Variable", slice.elementType(), currentScope, ctx.line, ctx.column);
+
+    Enviroment parentEnv = this.enviroment;
+    loopDepth++;
+
+    try {
+        for (int i = 0; i < slice.values().size(); i++) {
+            Enviroment iterationEnv = new Enviroment(parentEnv);
+            this.enviroment = iterationEnv;
+
+            iterationEnv.declare(ctx.indexName, new IntValue(i, ctx.line, ctx.column));
+            iterationEnv.declare(ctx.valueName, slice.values().get(i));
+
+            try {
+                Visit(ctx.body);
+            } catch (ContinueException e) {
+                // Saltar a la siguiente iteracion
+            } catch (BreakException e) {
+                break;
+            } finally {
+                this.enviroment = parentEnv;
+            }
+        }
+    } finally {
+        loopDepth--;
+        this.enviroment = parentEnv;
+    }
+
+    return defaultVoid;
+}
+
 @Override
 public ValueWrapper visit(RuneLiteral.Context ctx) {
     return new RuneValue(parseRune(ctx.value), ctx.line, ctx.column);
 }
 
+private boolean isValidDeclaredType(String type) {
+    if (type == null) {
+        return false;
+    }
+
+    if (type.equals("int")
+            || type.equals("float64")
+            || type.equals("string")
+            || type.equals("bool")
+            || type.equals("rune")) {
+        return true;
+    }
+
+    if (type.startsWith("[]")) {
+        String elementType = type.substring(2);
+        return isValidDeclaredType(elementType);
+    }
+
+    // Tipos struct declarados por el usuario
+    if (structTypes.containsKey(type)) {
+        return true;
+    }
+
+    return false;
+}
+
 private ValueWrapper defaultValueForType(String type, int line, int column) {
-    return switch (type) {
-        case "int" -> new IntValue(0, line, column);
-        case "float64" -> new DecimalValue(0.0, line, column);
-        case "string" -> new StringValue("\"\"", line, column);
-        case "bool" -> new BoolValue(false, line, column);
-        case "rune" -> new RuneValue((char) 0, line, column);
+    if (type.equals("int")) {
+        return new IntValue(0, line, column);
+    }
 
-        default -> {
-            this.errors.add(
-                new GoliteError(
-                    "Semantico",
-                    "Tipo no reconocido: " + type,
-                    line,
-                    column
-                )
-            );
+    if (type.equals("float64")) {
+        return new DecimalValue(0.0, line, column);
+    }
 
-            yield defaultVoid;
+    if (type.equals("string")) {
+        return new StringValue("\"\"", line, column);
+    }
+
+    if (type.equals("bool")) {
+        return new BoolValue(false, line, column);
+    }
+
+    if (type.equals("rune")) {
+        return new RuneValue((char) 0, line, column);
+    }
+
+    if (type.startsWith("[]")) {
+        String elementType = type.substring(2);
+        return new SliceValue(elementType, new java.util.ArrayList<>(), line, column);
+    }
+
+    if (structTypes.containsKey(type)) {
+        StructTypeDecl.Context structType = structTypes.get(type);
+        Map<String, ValueWrapper> values = new LinkedHashMap<>();
+
+        for (StructField field : structType.fields) {
+            values.put(field.name, defaultValueForType(field.type, field.line, field.column));
         }
-    };
+
+        return new StructValue(type, values, line, column);
+    }
+
+    this.errors.add(
+        new GoliteError(
+            "Semantico",
+            "Tipo no reconocido: " + type,
+            line,
+            column
+        )
+    );
+
+    return defaultVoid;
 }
 
 private ValueWrapper castToDeclaredType(String type, ValueWrapper value, int line, int column) {
+    if (value == null) {
+        return defaultVoid;
+    }
+
     if (value instanceof NilValue) {
         this.errors.add(
             new GoliteError(
                 "Semantico",
-                "No se puede asignar nil a una variable de tipo primitivo '" + type + "'",
+                "No se puede asignar nil a una variable de tipo '" + type + "'",
                 line,
                 column
             )
@@ -518,110 +1046,40 @@ private ValueWrapper castToDeclaredType(String type, ValueWrapper value, int lin
         return defaultVoid;
     }
 
-    return switch (type) {
-        case "int" -> {
-            if (value instanceof IntValue) {
-                yield value;
-            }
+    /*
+     * Caso normal:
+     * int con int
+     * string con string
+     * []int con []int
+     * []string con []string
+     */
+    if (type.equals(value.getTypeName())) {
+        return value;
+    }
 
-            this.errors.add(
-                new GoliteError(
-                    "Semantico",
-                    "No se puede asignar un valor de tipo '" + value.getTypeName() + "' a una variable de tipo 'int'",
-                    line,
-                    column
-                )
-            );
+    /*
+     * Permitir:
+     * var x float64 = 10
+     */
+    if (type.equals("float64") && value instanceof IntValue v) {
+        return new DecimalValue(v.value(), v.line(), v.column());
+    }
 
-            yield defaultVoid;
-        }
+    this.errors.add(
+        new GoliteError(
+            "Semantico",
+            "No se puede asignar un valor de tipo '" + value.getTypeName()
+            + "' a una variable de tipo '" + type + "'",
+            line,
+            column
+        )
+    );
 
-        case "float64" -> {
-            if (value instanceof DecimalValue) {
-                yield value;
-            }
-
-            if (value instanceof IntValue v) {
-                yield new DecimalValue(v.value(), v.line(), v.column());
-            }
-
-            this.errors.add(
-                new GoliteError(
-                    "Semantico",
-                    "No se puede asignar un valor de tipo '" + value.getTypeName() + "' a una variable de tipo 'float64'",
-                    line,
-                    column
-                )
-            );
-
-            yield defaultVoid;
-        }
-
-        case "string" -> {
-            if (value instanceof StringValue) {
-                yield value;
-            }
-
-            this.errors.add(
-                new GoliteError(
-                    "Semantico",
-                    "No se puede asignar un valor de tipo '" + value.getTypeName() + "' a una variable de tipo 'string'",
-                    line,
-                    column
-                )
-            );
-
-            yield defaultVoid;
-        }
-
-        case "bool" -> {
-            if (value instanceof BoolValue) {
-                yield value;
-            }
-
-            this.errors.add(
-                new GoliteError(
-                    "Semantico",
-                    "No se puede asignar un valor de tipo '" + value.getTypeName() + "' a una variable de tipo 'bool'",
-                    line,
-                    column
-                )
-            );
-
-            yield defaultVoid;
-        }
-
-        case "rune" -> {
-            if (value instanceof RuneValue) {
-                yield value;
-            }
-
-            this.errors.add(
-                new GoliteError(
-                    "Semantico",
-                    "No se puede asignar un valor de tipo '" + value.getTypeName() + "' a una variable de tipo 'rune'",
-                    line,
-                    column
-                )
-            );
-
-            yield defaultVoid;
-        }
-
-        default -> {
-            this.errors.add(
-                new GoliteError(
-                    "Semantico",
-                    "Tipo no reconocido: " + type,
-                    line,
-                    column
-                )
-            );
-
-            yield defaultVoid;
-        }
-    };
+    return defaultVoid;
 }
+
+
+
 
 private char parseRune(String raw) {
     String content = raw.substring(1, raw.length() - 1);
@@ -717,6 +1175,29 @@ public ValueWrapper visit(EmbeddedFunction.Context ctx) {
         return defaultVoid;
     }
 
+    if (ctx.functionName.equals("Len")) {
+        ValueWrapper value = Visit(ctx.expression);
+
+        if (value instanceof SliceValue slice) {
+            return new IntValue(slice.values().size(), ctx.line, ctx.column);
+        }
+
+        if (value instanceof StringValue stringValue) {
+            return new IntValue(stringValue.toString().length(), ctx.line, ctx.column);
+        }
+
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "La funcion len solo acepta slices o strings, pero recibio '" + value.getTypeName() + "'",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
     this.errors.add(
         new GoliteError(
             "Semantico",
@@ -732,11 +1213,11 @@ public ValueWrapper visit(EmbeddedFunction.Context ctx) {
 
 @Override
 public ValueWrapper visit(BreakStm.Context ctx) {
-    if (loopDepth <= 0) {
+    if (loopDepth <= 0 && switchDepth <= 0) {
         this.errors.add(
             new GoliteError(
                 "Semantico",
-                "La sentencia break solo puede usarse dentro de un ciclo",
+                "La sentencia break solo puede usarse dentro de un ciclo o switch",
                 ctx.line,
                 ctx.column
             )
@@ -843,6 +1324,70 @@ public ValueWrapper visit(Mod.Context ctx) {
 
     return defaultVoid;
 }
+
+@Override
+public ValueWrapper visit(MainFunction.Context ctx) {
+    Enviroment previous = this.enviroment;
+    String previousScope = this.currentScope;
+
+    try {
+        this.enviroment = new Enviroment(previous);
+        this.currentScope = "main";
+
+        Visit(ctx.body);
+
+    } catch (ReturnException e) {
+        // En main, return solo termina la ejecución.
+    } finally {
+        this.enviroment = previous;
+        this.currentScope = previousScope;
+    }
+
+    return defaultVoid;
+}
+
+@Override
+public ValueWrapper visit(SwitchNode.Context ctx) {
+    ValueWrapper switchValue = Visit(ctx.expression);
+
+    switchDepth++;
+
+    try {
+        // Recorremos los cases uno por uno
+        for (CaseNode caseNode : ctx.cases.getCases()) {
+            ValueWrapper caseValue = Visit(caseNode.getValue());
+
+            // Si el case coincide, ejecuta SOLO ese case
+            if (sameValue(switchValue, caseValue)) {
+                try {
+                    executeInNewScope(caseNode.getBody());
+                } catch (BreakException e) {
+                    // break dentro de switch solo sale del switch
+                }
+
+                // BREAK IMPLICITO DEL SWITCH
+                // Esto evita que ejecute los demás case y default.
+                return defaultVoid;
+            }
+        }
+
+        // Si ningún case coincidió, ejecuta default si existe
+        if (ctx.defaultBody != null) {
+            try {
+                executeInNewScope(ctx.defaultBody);
+            } catch (BreakException e) {
+                // break dentro de default solo sale del switch
+            }
+        }
+
+    } finally {
+        switchDepth--;
+    }
+
+    return defaultVoid;
+}
+
+
 
 @Override
 public ValueWrapper visit(Compare.Context ctx) {
@@ -1050,6 +1595,735 @@ public ValueWrapper visit(Logical.Context ctx) {
     return defaultVoid;
 }
 
+
+@Override
+public ValueWrapper visit(FunctionDecl.Context ctx) {
+
+    if (statmentsDepth > 1) {
+    this.errors.add(
+        new GoliteError(
+            "Semantico",
+            "La funcion '" + ctx.name + "' solo puede declararse en el ambito global",
+            ctx.line,
+            ctx.column
+        )
+    );
+
+    return defaultVoid;
+}
+
+    if (functions.containsKey(ctx.name)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "La funcion '" + ctx.name + "' ya fue declarada",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    Set<String> paramNames = new HashSet<>();
+
+    for (FunctionParam param : ctx.params) {
+        if (paramNames.contains(param.name)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El parametro '" + param.name + "' esta repetido en la funcion '" + ctx.name + "'",
+                    param.line,
+                    param.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        paramNames.add(param.name);
+    }
+    String functionType = ctx.returnType == null ? "void" : ctx.returnType;
+String symbolType = ctx.returnType == null ? "Procedimiento" : "Funcion";
+
+addSymbol(ctx.name, symbolType, functionType, "Global", ctx.line, ctx.column);
+
+for (FunctionParam param : ctx.params) {
+    addSymbol(param.name, "Parametro", param.type, ctx.name, param.line, param.column);
+}
+    functions.put(ctx.name, ctx);
+    return defaultVoid;
+}
+
+@Override
+public ValueWrapper visit(FunctionCall.Context ctx) {
+    FunctionDecl.Context function = functions.get(ctx.name);
+
+    if (function == null) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "La funcion '" + ctx.name + "' no esta declarada",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (ctx.arguments.size() != function.params.size()) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "La funcion '" + ctx.name + "' esperaba "
+                + function.params.size() + " argumentos, pero recibio "
+                + ctx.arguments.size(),
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    java.util.List<ValueWrapper> argumentValues = new java.util.ArrayList<>();
+
+    for (ASTNODE argument : ctx.arguments) {
+        argumentValues.add(Visit(argument));
+    }
+
+    Enviroment previous = this.enviroment;
+    String previousScope =this.currentScope;
+
+    try {
+        this.enviroment = new Enviroment(previous);
+        this.currentScope = ctx.name;
+
+        for (int i = 0; i < function.params.size(); i++) {
+            FunctionParam param = function.params.get(i);
+            ValueWrapper argumentValue = argumentValues.get(i);
+
+            if (!isParameterTypeCompatible(param.type, argumentValue)) {
+                this.errors.add(
+                    new GoliteError(
+                        "Semantico",
+                        "El parametro '" + param.name + "' de la funcion '" + ctx.name
+                        + "' esperaba tipo '" + param.type
+                        + "' pero recibio '" + argumentValue.getTypeName() + "'",
+                        param.line,
+                        param.column
+                    )
+                );
+
+                return defaultVoid;
+            }
+
+            ValueWrapper valueToDeclare = convertParameterValue(param.type, argumentValue);
+            this.enviroment.declare(param.name, valueToDeclare);
+        }
+
+        Visit(function.body);
+
+        if (function.returnType != null) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "La funcion '" + ctx.name + "' debe retornar un valor de tipo '" + function.returnType + "'",
+                    ctx.line,
+                    ctx.column
+                )
+            );
+        }
+
+        return defaultVoid;
+
+    } catch (ReturnException e) {
+        ValueWrapper returnedValue = e.getValue();
+
+        if (function.returnType == null) {
+            if (!returnedValue.getTypeName().equals("void")) {
+                this.errors.add(
+                    new GoliteError(
+                        "Semantico",
+                        "La funcion '" + ctx.name + "' no debe retornar valor",
+                        ctx.line,
+                        ctx.column
+                    )
+                );
+            }
+
+            return defaultVoid;
+        }
+
+        if (!isReturnTypeCompatible(function.returnType, returnedValue)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "La funcion '" + ctx.name + "' debe retornar '" + function.returnType
+                    + "' pero retorno '" + returnedValue.getTypeName() + "'",
+                    ctx.line,
+                    ctx.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        return returnedValue;
+
+    } finally {
+    this.enviroment = previous;
+    this.currentScope = previousScope;
+}
+}
+
+@Override
+public ValueWrapper visit(SliceLiteral.Context ctx) {
+    List<ValueWrapper> values = new ArrayList<>();
+
+    for (ASTNODE node : ctx.values) {
+        ValueWrapper value = Visit(node);
+
+        if (!isSliceElementCompatible(ctx.elementType, value)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El slice esperaba valores de tipo '" + ctx.elementType
+                    + "' pero recibio '" + value.getTypeName() + "'",
+                    value.line(),
+                    value.column()
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        values.add(convertSliceElement(ctx.elementType, value));
+    }
+
+    return new SliceValue(ctx.elementType, values, ctx.line, ctx.column);
+}
+
+
+
+@Override
+public ValueWrapper visit(SliceAccess.Context ctx) {
+    ValueWrapper sliceValue = Visit(ctx.slice);
+    ValueWrapper indexValue = Visit(ctx.index);
+    if (sliceValue instanceof VoidValue) {
+    return defaultVoid;
+}
+
+if (indexValue instanceof VoidValue) {
+    return defaultVoid;
+}
+
+    if (!(sliceValue instanceof SliceValue slice)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Solo se puede acceder por indice a un slice",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (!(indexValue instanceof IntValue index)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El indice del slice debe ser de tipo int",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    int i = index.value();
+
+    if (i < 0 || i >= slice.values().size()) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Indice fuera de rango. El slice tiene tamaño "
+                + slice.values().size() + " y se intento acceder a la posicion " + i,
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    return slice.values().get(i);
+}
+
+
+@Override
+public ValueWrapper visit(SliceAssign.Context ctx) {
+    ValueWrapper sliceValue = Visit(ctx.slice);
+    ValueWrapper indexValue = Visit(ctx.index);
+    ValueWrapper newValue = Visit(ctx.value);
+
+    if (!(sliceValue instanceof SliceValue slice)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Solo se puede asignar por indice a un slice",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (!(indexValue instanceof IntValue index)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El indice del slice debe ser de tipo int",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    int i = index.value();
+
+    if (i < 0 || i >= slice.values().size()) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Indice fuera de rango. El slice tiene tamaño "
+                + slice.values().size() + " y se intento asignar en la posicion " + i,
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (!isSliceElementCompatible(slice.elementType(), newValue)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El slice espera valores de tipo '" + slice.elementType()
+                + "' pero se intento asignar '" + newValue.getTypeName() + "'",
+                newValue.line(),
+                newValue.column()
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    ValueWrapper valueToSet = convertSliceElement(slice.elementType(), newValue);
+    slice.values().set(i, valueToSet);
+
+    return defaultVoid;
+}
+
+
+@Override
+public ValueWrapper visit(StructTypeDecl.Context ctx) {
+
+    if (statmentsDepth > 1) {
+    this.errors.add(new GoliteError(
+        "Semantico",
+        "El struct '" + ctx.name + "' solo puede declararse en el ambito global",
+        ctx.line,
+        ctx.column
+    ));
+    return defaultVoid;
+}
+
+    if (structTypes.containsKey(ctx.name)) {
+        this.errors.add(new GoliteError(
+            "Semantico",
+            "El struct '" + ctx.name + "' ya fue declarado",
+            ctx.line,
+            ctx.column
+        ));
+        return defaultVoid;
+    }
+
+    if (ctx.fields == null || ctx.fields.isEmpty()) {
+        this.errors.add(new GoliteError(
+            "Semantico",
+            "El struct '" + ctx.name + "' debe tener al menos un atributo",
+            ctx.line,
+            ctx.column
+        ));
+        return defaultVoid;
+    }
+
+    Set<String> fieldNames = new HashSet<>();
+
+    for (StructField field : ctx.fields) {
+        if (fieldNames.contains(field.name)) {
+            this.errors.add(new GoliteError(
+                "Semantico",
+                "El atributo '" + field.name + "' esta repetido en el struct '" + ctx.name + "'",
+                field.line,
+                field.column
+            ));
+            return defaultVoid;
+        }
+
+        if (!isValidDeclaredType(field.type)) {
+            this.errors.add(new GoliteError(
+                "Semantico",
+                "Tipo no reconocido en atributo '" + field.name + "': " + field.type,
+                field.line,
+                field.column
+            ));
+            return defaultVoid;
+        }
+
+        fieldNames.add(field.name);
+    }
+    addSymbol(ctx.name, "Struct", ctx.name, "Global", ctx.line, ctx.column);
+
+for (StructField field : ctx.fields) {
+    addSymbol(field.name, "Atributo", field.type, ctx.name, field.line, field.column);
+}
+
+    structTypes.put(ctx.name, ctx);
+    return defaultVoid;
+}
+
+@Override
+public ValueWrapper visit(StructLiteral.Context ctx) {
+    StructTypeDecl.Context structType = structTypes.get(ctx.structName);
+
+    if (structType == null) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El struct '" + ctx.structName + "' no esta declarado",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    Map<String, ValueWrapper> values = new LinkedHashMap<>();
+
+    // Primero llenamos todos los atributos con valores por defecto
+    for (StructField field : structType.fields) {
+        values.put(field.name, defaultValueForType(field.type, field.line, field.column));
+    }
+
+    Set<String> initializedFields = new HashSet<>();
+
+    // Luego reemplazamos los que vienen en Persona{campo: valor}
+    for (StructFieldInit init : ctx.fields) {
+        StructField fieldDefinition = findStructField(structType, init.name);
+
+        if (fieldDefinition == null) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El struct '" + ctx.structName + "' no tiene el atributo '" + init.name + "'",
+                    init.line,
+                    init.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        if (initializedFields.contains(init.name)) {
+            this.errors.add(
+                new GoliteError(
+                    "Semantico",
+                    "El atributo '" + init.name + "' fue inicializado mas de una vez",
+                    init.line,
+                    init.column
+                )
+            );
+
+            return defaultVoid;
+        }
+
+        ValueWrapper evaluated = Visit(init.value);
+        ValueWrapper casted = castToDeclaredType(
+            fieldDefinition.type,
+            evaluated,
+            init.line,
+            init.column
+        );
+
+        if (casted instanceof VoidValue) {
+            return defaultVoid;
+        }
+
+        values.put(init.name, casted);
+        initializedFields.add(init.name);
+    }
+
+    return new StructValue(ctx.structName, values, ctx.line, ctx.column);
+}
+
+@Override
+public ValueWrapper visit(StructAccess.Context ctx) {
+    ValueWrapper value = Visit(ctx.struct);
+
+    if (!(value instanceof StructValue structValue)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Solo se puede acceder a atributos de un struct",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (!structValue.fields().containsKey(ctx.fieldName)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El struct '" + structValue.structName() + "' no tiene el atributo '" + ctx.fieldName + "'",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    return structValue.fields().get(ctx.fieldName);
+}
+
+@Override
+public ValueWrapper visit(StructAssign.Context ctx) {
+    ValueWrapper structValueRaw = Visit(ctx.struct);
+
+    if (!(structValueRaw instanceof StructValue structValue)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "Solo se puede asignar atributos a un struct",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    StructTypeDecl.Context structType = structTypes.get(structValue.structName());
+
+    if (structType == null) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El struct '" + structValue.structName() + "' no esta declarado",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    StructField fieldDefinition = findStructField(structType, ctx.fieldName);
+
+    if (fieldDefinition == null) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "El struct '" + structValue.structName()
+                + "' no tiene el atributo '" + ctx.fieldName + "'",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    ValueWrapper evaluated = Visit(ctx.value);
+
+    ValueWrapper casted = castToDeclaredType(
+        fieldDefinition.type,
+        evaluated,
+        ctx.line,
+        ctx.column
+    );
+
+    if (casted instanceof VoidValue) {
+        return defaultVoid;
+    }
+
+    structValue.fields().put(ctx.fieldName, casted);
+
+    return defaultVoid;
+}
+
+
+@Override
+public ValueWrapper visit(AppendFunction.Context ctx) {
+    ValueWrapper sliceValue = Visit(ctx.slice);
+    ValueWrapper valueToAppend = Visit(ctx.value);
+
+    if (!(sliceValue instanceof SliceValue slice)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "La funcion append espera un slice como primer parametro",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return defaultVoid;
+    }
+
+    if (!isSliceElementCompatible(slice.elementType(), valueToAppend)) {
+    this.errors.add(
+        new GoliteError(
+            "Semantico",
+            "append esperaba un valor de tipo '" + slice.elementType()
+            + "' pero recibio '" + valueToAppend.getTypeName() + "'",
+            valueToAppend.line(),
+            valueToAppend.column()
+        )
+    );
+
+    // Evita error en cascada:
+    // numeros = append(numeros, "hola")
+    // devuelve el mismo slice sin modificarlo.
+    return sliceValue;
+}
+
+    java.util.List<ValueWrapper> newValues = new java.util.ArrayList<>(slice.values());
+
+    ValueWrapper convertedValue = convertSliceElement(slice.elementType(), valueToAppend);
+    newValues.add(convertedValue);
+
+    return new SliceValue(slice.elementType(), newValues, ctx.line, ctx.column);
+}
+
+@Override
+public ValueWrapper visit(SlicesIndexFunction.Context ctx) {
+    ValueWrapper sliceValue = Visit(ctx.slice);
+    ValueWrapper searchValue = Visit(ctx.value);
+
+    if (!(sliceValue instanceof SliceValue slice)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "slices.Index espera un slice como primer parametro",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return new IntValue(-1, ctx.line, ctx.column);
+    }
+
+    if (!isSliceElementCompatible(slice.elementType(), searchValue)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "slices.Index esperaba buscar un valor de tipo '" + slice.elementType()
+                + "' pero recibio '" + searchValue.getTypeName() + "'",
+                searchValue.line(),
+                searchValue.column()
+            )
+        );
+
+        return new IntValue(-1, ctx.line, ctx.column);
+    }
+
+    ValueWrapper convertedSearchValue = convertSliceElement(slice.elementType(), searchValue);
+
+    for (int i = 0; i < slice.values().size(); i++) {
+        ValueWrapper current = slice.values().get(i);
+
+        if (sameValue(current, convertedSearchValue)) {
+            return new IntValue(i, ctx.line, ctx.column);
+        }
+    }
+
+    return new IntValue(-1, ctx.line, ctx.column);
+}
+
+
+@Override
+public ValueWrapper visit(StringsJoinFunction.Context ctx) {
+    ValueWrapper sliceValue = Visit(ctx.slice);
+    ValueWrapper separatorValue = Visit(ctx.separator);
+
+    if (!(sliceValue instanceof SliceValue slice)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "strings.Join espera un slice como primer parametro",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return makeStringValue("", ctx.line, ctx.column);
+    }
+
+    if (!slice.elementType().equals("string")) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "strings.Join espera un slice de tipo []string, pero recibio '" + slice.getTypeName() + "'",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return makeStringValue("", ctx.line, ctx.column);
+    }
+
+    if (!(separatorValue instanceof StringValue separator)) {
+        this.errors.add(
+            new GoliteError(
+                "Semantico",
+                "strings.Join espera un separador de tipo string",
+                ctx.line,
+                ctx.column
+            )
+        );
+
+        return makeStringValue("", ctx.line, ctx.column);
+    }
+
+    java.util.List<String> parts = new java.util.ArrayList<>();
+
+    for (ValueWrapper value : slice.values()) {
+        if (value instanceof StringValue stringValue) {
+            parts.add(stringValue.toString());
+        }
+    }
+
+    String joined = String.join(separator.toString(), parts);
+
+    return makeStringValue(joined, ctx.line, ctx.column);
+}
+
+
 @Override
 public ValueWrapper visit(NilLiteral.Context ctx) {
     return new NilValue(ctx.line, ctx.column);
@@ -1069,6 +2343,161 @@ private boolean hasNil(ValueWrapper left, ValueWrapper right, String op) {
     }
 
     return false;
+}
+
+private boolean sameValue(ValueWrapper left, ValueWrapper right) {
+    if (left instanceof IntValue l && right instanceof IntValue r) {
+        return l.value() == r.value();
+    }
+
+    if (left instanceof IntValue l && right instanceof DecimalValue r) {
+        return l.value() == r.value();
+    }
+
+    if (left instanceof DecimalValue l && right instanceof IntValue r) {
+        return l.value() == r.value();
+    }
+
+    if (left instanceof DecimalValue l && right instanceof DecimalValue r) {
+        return l.value() == r.value();
+    }
+
+    if (left instanceof StringValue l && right instanceof StringValue r) {
+        return l.toString().equals(r.toString());
+    }
+
+    if (left instanceof BoolValue l && right instanceof BoolValue r) {
+        return l.value() == r.value();
+    }
+
+    if (left instanceof RuneValue l && right instanceof RuneValue r) {
+        return l.value() == r.value();
+    }
+
+    if (left instanceof RuneValue l && right instanceof IntValue r) {
+        return ((int) l.value()) == r.value();
+    }
+
+    if (left instanceof IntValue l && right instanceof RuneValue r) {
+        return l.value() == ((int) r.value());
+    }
+
+    if (left instanceof NilValue && right instanceof NilValue) {
+        return true;
+    }
+
+    return false;
+}
+
+private boolean isReturnTypeCompatible(String expectedType, ValueWrapper value) {
+    if (expectedType == null) {
+        return value.getTypeName().equals("void");
+    }
+
+    if (value == null) {
+        return false;
+    }
+
+    if (expectedType.equals(value.getTypeName())) {
+        return true;
+    }
+
+    // Permitimos retornar int en una funcion float64
+    if (expectedType.equals("float64") && value.getTypeName().equals("int")) {
+        return true;
+    }
+
+    return false;
+}
+
+private boolean isParameterTypeCompatible(String expectedType, ValueWrapper value) {
+    if (expectedType == null || value == null) {
+        return false;
+    }
+
+    if (expectedType.equals(value.getTypeName())) {
+        return true;
+    }
+
+    // Permitimos mandar int donde se espera float64
+    if (expectedType.equals("float64") && value.getTypeName().equals("int")) {
+        return true;
+    }
+
+    return false;
+}
+
+private ValueWrapper convertParameterValue(String expectedType, ValueWrapper value) {
+    if (expectedType.equals("float64") && value instanceof IntValue intValue) {
+        return new DecimalValue(intValue.value(), intValue.line(), intValue.column());
+    }
+
+    return value;
+}
+
+
+
+private boolean isSliceElementCompatible(String expectedType, ValueWrapper value) {
+    if (expectedType == null || value == null) {
+        return false;
+    }
+
+    if (expectedType.equals(value.getTypeName())) {
+        return true;
+    }
+
+    // Permitimos int dentro de []float64
+    if (expectedType.equals("float64") && value.getTypeName().equals("int")) {
+        return true;
+    }
+
+    return false;
+}
+
+private ValueWrapper convertSliceElement(String expectedType, ValueWrapper value) {
+    if (expectedType.equals("float64") && value instanceof IntValue intValue) {
+        return new DecimalValue(intValue.value(), intValue.line(), intValue.column());
+    }
+
+    return value;
+}
+
+
+private StringValue makeStringValue(String text, int line, int column) {
+    String escaped = text
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r");
+
+    return new StringValue("\"" + escaped + "\"", line, column);
+}
+
+
+private StructField findStructField(StructTypeDecl.Context structType, String fieldName) {
+    for (StructField field : structType.fields) {
+        if (field.name.equals(fieldName)) {
+            return field;
+        }
+    }
+
+    return null;
+}
+
+private void addSymbol(String id, String symbolType, String dataType, String scope, int line, int column) {
+    if (id == null || symbolType == null || dataType == null || scope == null) {
+        return;
+    }
+
+    String key = id + "|" + symbolType + "|" + dataType + "|" + scope + "|" + line + "|" + column;
+
+    if (symbolKeys.contains(key)) {
+        return;
+    }
+
+    symbolKeys.add(key);
+    symbols.add(new SymbolReport(id, symbolType, dataType, scope, line, column));
 }
 
 }
