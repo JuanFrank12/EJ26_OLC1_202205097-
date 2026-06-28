@@ -18,16 +18,17 @@ public class GoliteMenuBar extends JMenuBar {
 
     private final JMenuItem tokensItem;
     private final JMenuItem errorsItem;
-
-    // NUEVO: item para tabla de símbolos
     private final JMenuItem symbolsItem;
+    private final JMenuItem astItem;
 
     private final JMenuItem aboutItem;
 
     public GoliteMenuBar() {
         JMenu fileMenu = new JMenu("Archivo");
         runButton = createButton("Ejecutar");
+
         JMenu reportMenu = new JMenu("Reportes");
+
         cleanButton = createButton("Limpiar consola");
         JMenu helpMenu = new JMenu("Ayuda");
 
@@ -47,15 +48,13 @@ public class GoliteMenuBar extends JMenuBar {
 
         tokensItem = new JMenuItem("Reporte de tokens");
         errorsItem = new JMenuItem("Reporte de errores");
-
-        // NUEVO
         symbolsItem = new JMenuItem("Tabla de símbolos");
+        astItem = new JMenuItem("Reporte AST");
 
         reportMenu.add(tokensItem);
         reportMenu.add(errorsItem);
-
-        // NUEVO
         reportMenu.add(symbolsItem);
+        reportMenu.add(astItem);
 
         aboutItem = new JMenuItem("Acerca de");
         helpMenu.add(aboutItem);
@@ -76,10 +75,8 @@ public class GoliteMenuBar extends JMenuBar {
     public void onExit(ActionListener l)    { exitItem.addActionListener(l); }
     public void onTokens(ActionListener l)  { tokensItem.addActionListener(l); }
     public void onErrors(ActionListener l)  { errorsItem.addActionListener(l); }
-
-    // NUEVO: acción para tabla de símbolos
     public void onSymbols(ActionListener l) { symbolsItem.addActionListener(l); }
-
+    public void onAST(ActionListener l)     { astItem.addActionListener(l); }
     public void onAbout(ActionListener l)   { aboutItem.addActionListener(l); }
 
     private static JButton createButton(String text) {

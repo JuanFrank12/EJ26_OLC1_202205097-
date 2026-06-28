@@ -38,8 +38,11 @@ public class GoliteFrame extends JFrame {
 
     private File currentFile = null;
 
-    // Lista actual para el reporte de tabla de símbolos
+    // Reporte de tabla de símbolos
     private List<SymbolReport> currentSymbols = new ArrayList<>();
+
+    // Reporte AST
+    private ASTNODE currentAST = null;
 
     public GoliteFrame() {
         setTitle("Golite");
@@ -70,6 +73,7 @@ public class GoliteFrame extends JFrame {
             editorPanel.setText("");
             currentFile = null;
             currentSymbols = new ArrayList<>();
+            currentAST = null;
             lexer = null;
             parser = null;
             interpreter = null;
@@ -84,9 +88,8 @@ public class GoliteFrame extends JFrame {
 
         menuBar.onTokens(e -> tokens());
         menuBar.onErrors(e -> errors());
-
-        // NUEVO: reporte de tabla de símbolos
         menuBar.onSymbols(e -> symbols());
+        menuBar.onAST(e -> astReport());
 
         menuBar.onAbout(e -> JOptionPane.showMessageDialog(
                 this,
@@ -98,6 +101,7 @@ public class GoliteFrame extends JFrame {
     private void run() {
         try {
             currentSymbols = new ArrayList<>();
+            currentAST = null;
 
             lexer = new Lexer(new BufferedReader(new StringReader(editorPanel.getText())));
             parser = new parser(lexer);
@@ -126,10 +130,11 @@ public class GoliteFrame extends JFrame {
                 );
             }
 
+            currentAST = ast;
+
             interpreter = new InterpreterVisitor();
             interpreter.Visit(ast);
 
-            // NUEVO: guardamos los símbolos generados por el intérprete
             currentSymbols = new ArrayList<>(interpreter.symbols);
 
             cleanConsole();
@@ -171,6 +176,12 @@ public class GoliteFrame extends JFrame {
 
                 currentFile = selectedFile;
                 setTitle("Golite - " + selectedFile.getName());
+
+                currentSymbols = new ArrayList<>();
+                currentAST = null;
+                lexer = null;
+                parser = null;
+                interpreter = null;
 
                 cleanConsole();
 
@@ -376,7 +387,6 @@ public class GoliteFrame extends JFrame {
         ).setVisible(true);
     }
 
-    // NUEVO: reporte de tabla de símbolos
     private void symbols() {
         if (lexer == null || parser == null || interpreter == null) {
             JOptionPane.showMessageDialog(
@@ -398,6 +408,14 @@ public class GoliteFrame extends JFrame {
         };
 
         List<Object[]> filas = new ArrayList<>();
+
+        currentSymbols.sort((a, b) -> {
+            if (a.getLine() != b.getLine()) {
+                return Integer.compare(a.getLine(), b.getLine());
+            }
+
+            return Integer.compare(a.getColumn(), b.getColumn());
+        });
 
         for (SymbolReport symbol : currentSymbols) {
             filas.add(new Object[]{
@@ -428,6 +446,20 @@ public class GoliteFrame extends JFrame {
                 columnas,
                 datos
         ).setVisible(true);
+    }
+
+    private void astReport() {
+        if (currentAST == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Aún no se ha generado ningún AST. Ejecutá primero el código.",
+                    "Reporte AST",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        new ASTReportView(currentAST).setVisible(true);
     }
 
     private void cleanConsole() {
