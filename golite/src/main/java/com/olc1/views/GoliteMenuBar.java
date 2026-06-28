@@ -11,6 +11,10 @@ public class GoliteMenuBar extends JMenuBar {
     private final JMenuItem loadItem;
     private final JMenuItem saveItem;
     private final JMenuItem saveAsItem;
+
+    // NUEVO: cerrar pestaña
+    private final JMenuItem closeTabItem;
+
     private final JMenuItem exitItem;
 
     private final JButton runButton;
@@ -36,6 +40,10 @@ public class GoliteMenuBar extends JMenuBar {
         loadItem = new JMenuItem("Cargar archivo .GLT");
         saveItem = new JMenuItem("Guardar");
         saveAsItem = new JMenuItem("Guardar como");
+
+        // NUEVO
+        closeTabItem = new JMenuItem("Cerrar pestaña");
+
         exitItem = new JMenuItem("Salir");
 
         fileMenu.add(newItem);
@@ -44,6 +52,11 @@ public class GoliteMenuBar extends JMenuBar {
         fileMenu.add(saveItem);
         fileMenu.add(saveAsItem);
         fileMenu.addSeparator();
+
+        // NUEVO
+        fileMenu.add(closeTabItem);
+        fileMenu.addSeparator();
+
         fileMenu.add(exitItem);
 
         tokensItem = new JMenuItem("Reporte de tokens");
@@ -66,18 +79,25 @@ public class GoliteMenuBar extends JMenuBar {
         add(helpMenu);
     }
 
-    public void onRun(ActionListener l)     { runButton.addActionListener(l); }
-    public void onClean(ActionListener l)   { cleanButton.addActionListener(l); }
-    public void onNew(ActionListener l)     { newItem.addActionListener(l); }
-    public void onLoad(ActionListener l)    { loadItem.addActionListener(l); }
-    public void onSave(ActionListener l)    { saveItem.addActionListener(l); }
-    public void onSaveAs(ActionListener l)  { saveAsItem.addActionListener(l); }
-    public void onExit(ActionListener l)    { exitItem.addActionListener(l); }
-    public void onTokens(ActionListener l)  { tokensItem.addActionListener(l); }
-    public void onErrors(ActionListener l)  { errorsItem.addActionListener(l); }
-    public void onSymbols(ActionListener l) { symbolsItem.addActionListener(l); }
-    public void onAST(ActionListener l)     { astItem.addActionListener(l); }
-    public void onAbout(ActionListener l)   { aboutItem.addActionListener(l); }
+    public void onRun(ActionListener l)      { runButton.addActionListener(l); }
+    public void onClean(ActionListener l)    { cleanButton.addActionListener(l); }
+
+    public void onNew(ActionListener l)      { newItem.addActionListener(l); }
+    public void onLoad(ActionListener l)     { loadItem.addActionListener(l); }
+    public void onSave(ActionListener l)     { saveItem.addActionListener(l); }
+    public void onSaveAs(ActionListener l)   { saveAsItem.addActionListener(l); }
+
+    // NUEVO: acción para cerrar pestaña
+    public void onCloseTab(ActionListener l) { closeTabItem.addActionListener(l); }
+
+    public void onExit(ActionListener l)     { exitItem.addActionListener(l); }
+
+    public void onTokens(ActionListener l)   { tokensItem.addActionListener(l); }
+    public void onErrors(ActionListener l)   { errorsItem.addActionListener(l); }
+    public void onSymbols(ActionListener l)  { symbolsItem.addActionListener(l); }
+    public void onAST(ActionListener l)      { astItem.addActionListener(l); }
+
+    public void onAbout(ActionListener l)    { aboutItem.addActionListener(l); }
 
     private static JButton createButton(String text) {
         JButton button = new JButton(text);

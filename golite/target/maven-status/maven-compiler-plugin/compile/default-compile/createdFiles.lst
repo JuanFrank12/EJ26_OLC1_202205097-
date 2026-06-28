@@ -5,8 +5,10 @@ com\olc1\ast\stm\IfNode$Context.class
 com\olc1\ast\exp\SliceLiteral.class
 com\olc1\ast\exp\Logical.class
 com\olc1\ast\exp\Paren$Context.class
+com\olc1\ast\stm\ForRange.class
 com\olc1\ast\exp\FunctionCall$Context.class
 com\olc1\ast\stm\Imprimir.class
+analisis\parser.class
 com\olc1\ast\exp\StructLiteral.class
 com\olc1\ast\stm\Statments$Context.class
 com\olc1\ast\exp\Compare.class
@@ -21,6 +23,8 @@ com\olc1\ast\exp\Decimal$Context.class
 com\olc1\ast\exp\Negate.class
 com\olc1\visitor\interpreter\transfer\ReturnException.class
 com\olc1\ast\stm\VarDecl$Context.class
+com\olc1\views\SymbolTableReportView.class
+analisis\parser$CUP$parser$actions.class
 com\olc1\ast\exp\Mod.class
 com\olc1\ast\stm\FunctionParam.class
 com\olc1\visitor\interpreter\value\StructValue.class
@@ -29,6 +33,8 @@ com\olc1\visitor\interpreter\value\DecimalValue.class
 com\olc1\views\MainPanel.class
 com\olc1\visitor\interpreter\value\NilValue.class
 com\olc1\visitor\interpreter\Enviroment.class
+com\olc1\ast\stm\ForRange$Context.class
+com\olc1\views\ASTReportView.class
 com\olc1\ast\exp\StringLiteral.class
 com\olc1\reports\GoliteError.class
 com\olc1\ast\exp\Paren.class
@@ -52,6 +58,7 @@ com\olc1\ast\exp\StringLiteral$Context.class
 com\olc1\views\MainPanel$1.class
 com\olc1\ast\stm\Imprimir$Context.class
 com\olc1\ast\stm\CaseNode.class
+com\olc1\views\TabbedEditorPanel.class
 com\olc1\visitor\interpreter\value\SliceValue.class
 com\olc1\ast\exp\RuneLiteral.class
 com\olc1\visitor\interpreter\value\RuneValue.class
@@ -67,6 +74,7 @@ com\olc1\ast\exp\StructAccess$Context.class
 com\olc1\ast\stm\ContinueStm.class
 com\olc1\ast\stm\ElifNodes.class
 com\olc1\ast\exp\StringsJoinFunction$Context.class
+com\olc1\reports\SymbolReport.class
 com\olc1\ast\exp\SliceAccess.class
 com\olc1\views\GoliteMenuBar$1.class
 com\olc1\ast\exp\MethodCall$Context.class
@@ -83,9 +91,11 @@ com\olc1\ast\stm\CaseNodes.class
 com\olc1\ast\exp\Add.class
 com\olc1\views\EditorPanel$1.class
 com\olc1\ast\exp\EmbeddedFunction$Context.class
+com\olc1\views\EditorTab.class
 com\olc1\ast\exp\AllLocate.class
 com\olc1\reports\TokenReport.class
 com\olc1\views\ReportWindow$1.class
+com\olc1\visitor\interpreter\InterpreterVisitor.class
 com\olc1\views\GoliteFrame.class
 com\olc1\ast\exp\AppendFunction.class
 com\olc1\visitor\interpreter\value\IntValue.class
@@ -118,6 +128,7 @@ com\olc1\ast\exp\Decimal.class
 com\olc1\ast\exp\StructAccess.class
 com\olc1\visitor\interpreter\transfer\ContinueException.class
 com\olc1\ast\exp\StructFieldInit.class
+com\olc1\reports\ASTDotGenerator.class
 com\olc1\ast\exp\Integers.class
 com\olc1\ast\stm\Assign.class
 com\olc1\ast\stm\IfNode.class

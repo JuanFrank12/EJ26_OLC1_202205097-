@@ -1,11 +1,19 @@
 package com.olc1.views;
 
 import java.awt.Dimension;
+import java.awt.BorderLayout;
+import java.awt.Font;
+
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JTextArea;
 import javax.swing.JFileChooser;
+import javax.swing.JLabel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.BadLocationException;
+
 
 import java.io.BufferedReader;
 import java.io.StringReader;
@@ -29,19 +37,15 @@ import com.olc1.reports.SymbolReport;
 import com.olc1.visitor.interpreter.InterpreterVisitor;
 
 public class GoliteFrame extends JFrame {
-    private final EditorPanel editorPanel;
+    private final TabbedEditorPanel tabbedEditorPanel;
     private final JTextArea consoleTextArea;
+    private final JLabel positionLabel;
 
     private Lexer lexer;
     private parser parser;
     InterpreterVisitor interpreter;
 
-    private File currentFile = null;
-
-    // Reporte de tabla de símbolos
     private List<SymbolReport> currentSymbols = new ArrayList<>();
-
-    // Reporte AST
     private ASTNODE currentAST = null;
 
     public GoliteFrame() {
@@ -50,19 +54,47 @@ public class GoliteFrame extends JFrame {
         setSize(new Dimension(1200, 675));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
+        setLayout(new BorderLayout());
 
-        editorPanel = new EditorPanel();
+        tabbedEditorPanel = new TabbedEditorPanel();
+
         consoleTextArea = new JTextArea();
+        consoleTextArea.setEditable(false);
+
+        // IMPORTANTE: fuente monoespaciada para que las tablas se alineen bien
+        consoleTextArea.setFont(new Font("Consolas", Font.PLAIN, 14));
+        consoleTextArea.setLineWrap(false);
+        consoleTextArea.setWrapStyleWord(false);
+        consoleTextArea.setTabSize(4);
+
+        
+
+        positionLabel = new JLabel(" Línea: 1 | Columna: 1 ");
+
         cleanConsole();
 
         GoliteMenuBar menuBar = new GoliteMenuBar();
         setJMenuBar(menuBar);
-        add(new MainPanel(editorPanel, consoleTextArea));
+
+        JScrollPane consoleScroll = new JScrollPane(consoleTextArea);
+
+        JSplitPane splitPane = new JSplitPane(
+                JSplitPane.VERTICAL_SPLIT,
+                tabbedEditorPanel,
+                consoleScroll
+        );
+
+        splitPane.setResizeWeight(0.75);
+        splitPane.setDividerLocation(470);
+
+        add(splitPane, BorderLayout.CENTER);
+        add(positionLabel, BorderLayout.SOUTH);
 
         wireActions(menuBar);
+        wireTabbedEditorListeners();
 
         setVisible(true);
-        editorPanel.getTextArea().requestFocus();
+        focusCurrentEditor();
     }
 
     private void wireActions(GoliteMenuBar menuBar) {
@@ -70,20 +102,28 @@ public class GoliteFrame extends JFrame {
         menuBar.onClean(e -> cleanConsole());
 
         menuBar.onNew(e -> {
-            editorPanel.setText("");
-            currentFile = null;
-            currentSymbols = new ArrayList<>();
-            currentAST = null;
-            lexer = null;
-            parser = null;
-            interpreter = null;
+            EditorTab tab = tabbedEditorPanel.newTab();
+            attachCaretListener(tab.getEditorPanel());
+
+            resetReports();
             setTitle("Golite");
             cleanConsole();
+            updateCaretPosition();
+            focusCurrentEditor();
         });
 
         menuBar.onLoad(e -> loadGLTFile());
         menuBar.onSave(e -> saveGLTFile());
         menuBar.onSaveAs(e -> saveAsGLTFile());
+
+        menuBar.onCloseTab(e -> {
+            tabbedEditorPanel.closeCurrentTab();
+            resetReports();
+            cleanConsole();
+            updateCaretPosition();
+            focusCurrentEditor();
+        });
+
         menuBar.onExit(e -> System.exit(0));
 
         menuBar.onTokens(e -> tokens());
@@ -98,12 +138,43 @@ public class GoliteFrame extends JFrame {
                 JOptionPane.INFORMATION_MESSAGE));
     }
 
+    private void wireTabbedEditorListeners() {
+        EditorPanel currentEditor = tabbedEditorPanel.getCurrentEditorPanel();
+
+        if (currentEditor != null) {
+            attachCaretListener(currentEditor);
+        }
+
+        tabbedEditorPanel.addChangeListener(e -> {
+            EditorPanel editor = tabbedEditorPanel.getCurrentEditorPanel();
+
+            if (editor != null) {
+                attachCaretListener(editor);
+            }
+
+            resetReports();
+            updateCaretPosition();
+            focusCurrentEditor();
+        });
+
+        updateCaretPosition();
+    }
+
+    private void attachCaretListener(EditorPanel editorPanel) {
+        if (editorPanel == null) {
+            return;
+        }
+
+        editorPanel.getTextArea().addCaretListener(e -> updateCaretPosition());
+    }
+
     private void run() {
         try {
-            currentSymbols = new ArrayList<>();
-            currentAST = null;
+            resetReports();
 
-            lexer = new Lexer(new BufferedReader(new StringReader(editorPanel.getText())));
+            String input = tabbedEditorPanel.getCurrentText();
+
+            lexer = new Lexer(new BufferedReader(new StringReader(input)));
             parser = new parser(lexer);
 
             Object result = parser.parse().value;
@@ -146,7 +217,8 @@ public class GoliteFrame extends JFrame {
         }
 
         consoleTextArea.setCaretPosition(consoleTextArea.getDocument().getLength());
-        editorPanel.getTextArea().requestFocus();
+        focusCurrentEditor();
+        updateCaretPosition();
     }
 
     private void loadGLTFile() {
@@ -172,21 +244,20 @@ public class GoliteFrame extends JFrame {
                         StandardCharsets.UTF_8
                 );
 
-                editorPanel.setText(content);
+                EditorTab tab = tabbedEditorPanel.openFile(selectedFile, content);
+                attachCaretListener(tab.getEditorPanel());
 
-                currentFile = selectedFile;
+                tab.getEditorPanel().getTextArea().setCaretPosition(0);
+
+                resetReports();
                 setTitle("Golite - " + selectedFile.getName());
 
-                currentSymbols = new ArrayList<>();
-                currentAST = null;
-                lexer = null;
-                parser = null;
-                interpreter = null;
-
                 cleanConsole();
-
                 consoleTextArea.append("Archivo cargado correctamente:\n");
                 consoleTextArea.append(selectedFile.getAbsolutePath() + "\n");
+
+                updateCaretPosition();
+                focusCurrentEditor();
 
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(
@@ -198,10 +269,12 @@ public class GoliteFrame extends JFrame {
             }
         }
 
-        editorPanel.getTextArea().requestFocus();
+        focusCurrentEditor();
     }
 
     private void saveGLTFile() {
+        File currentFile = tabbedEditorPanel.getCurrentFile();
+
         if (currentFile == null) {
             saveAsGLTFile();
             return;
@@ -231,19 +304,20 @@ public class GoliteFrame extends JFrame {
                 selectedFile = new File(selectedFile.getAbsolutePath() + ".glt");
             }
 
-            currentFile = selectedFile;
-            saveContentToFile(currentFile);
-            setTitle("Golite - " + currentFile.getName());
+            tabbedEditorPanel.setCurrentFile(selectedFile);
+            saveContentToFile(selectedFile);
+
+            setTitle("Golite - " + selectedFile.getName());
         }
 
-        editorPanel.getTextArea().requestFocus();
+        focusCurrentEditor();
     }
 
     private void saveContentToFile(File file) {
         try {
             Files.writeString(
                     file.toPath(),
-                    editorPanel.getText(),
+                    tabbedEditorPanel.getCurrentText(),
                     StandardCharsets.UTF_8
             );
 
@@ -260,7 +334,7 @@ public class GoliteFrame extends JFrame {
             );
         }
 
-        editorPanel.getTextArea().requestFocus();
+        focusCurrentEditor();
     }
 
     private void errors() {
@@ -462,12 +536,56 @@ public class GoliteFrame extends JFrame {
         new ASTReportView(currentAST).setVisible(true);
     }
 
+    private void updateCaretPosition() {
+        EditorPanel currentEditor = tabbedEditorPanel.getCurrentEditorPanel();
+
+        if (currentEditor == null) {
+            positionLabel.setText(" Línea: - | Columna: - ");
+            return;
+        }
+
+        JTextArea textArea = currentEditor.getTextArea();
+        int caretPosition = textArea.getCaretPosition();
+
+        try {
+            int line = textArea.getLineOfOffset(caretPosition) + 1;
+            int column = caretPosition - textArea.getLineStartOffset(line - 1) + 1;
+
+            positionLabel.setText(" Línea: " + line + " | Columna: " + column + " ");
+
+        } catch (BadLocationException e) {
+            positionLabel.setText(" Línea: - | Columna: - ");
+        }
+    }
+
+    private void resetReports() {
+        currentSymbols = new ArrayList<>();
+        currentAST = null;
+        lexer = null;
+        parser = null;
+        interpreter = null;
+    }
+
+    private void focusCurrentEditor() {
+        EditorPanel currentEditor = tabbedEditorPanel.getCurrentEditorPanel();
+
+        if (currentEditor != null) {
+            currentEditor.getTextArea().requestFocus();
+        }
+    }
+
     private void cleanConsole() {
         consoleTextArea.setText("CONSOLA  -  LABORATORIO DE ORGANIZACION DE LENGUAJES Y COMPILADORES 1\n\n");
     }
 
     public EditorPanel getEditorPanel() {
-        return editorPanel;
+        EditorPanel currentEditor = tabbedEditorPanel.getCurrentEditorPanel();
+
+        if (currentEditor == null) {
+            return null;
+        }
+
+        return currentEditor;
     }
 
     public JTextArea getConsoleTextArea() {
