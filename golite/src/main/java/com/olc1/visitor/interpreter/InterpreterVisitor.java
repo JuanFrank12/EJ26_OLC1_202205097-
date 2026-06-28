@@ -562,60 +562,50 @@ public ValueWrapper visit(Statments.Context ctx) {
         if (isTopLevel) {
             MainFunction mainFunction = null;
 
-            // 1. Primero registramos structs globales
+            // 1. Registrar structs globales
             for (ASTNODE statement : ctx.statements) {
                 if (statement instanceof StructTypeDecl) {
                     Visit(statement);
                 }
             }
 
-            // 2. Luego registramos metodos, funciones y buscamos main
+            // 2. Registrar métodos, funciones y buscar main
             for (ASTNODE statement : ctx.statements) {
                 if (statement instanceof MethodDecl) {
                     Visit(statement);
+
                 } else if (statement instanceof FunctionDecl) {
                     Visit(statement);
+
                 } else if (statement instanceof MainFunction main) {
                     mainFunction = main;
                 }
             }
 
-            // Si ya hubo errores al registrar structs, funciones o métodos,
-            // NO ejecutamos main ni codigo suelto.
-            if (!this.errors.isEmpty()) {
-                return defaultVoid;
-            }
-
-            // 3. Si existe main, se ejecuta solo main
+            // IMPORTANTE:
+            // Aunque haya errores semánticos globales, igual se ejecuta main.
+            // Esto permite recuperación de errores.
             if (mainFunction != null) {
                 return Visit(mainFunction);
             }
 
-            // 4. Compatibilidad: si no hay main, ejecuta codigo suelto
+            // Compatibilidad: si no hay main, ejecuta código suelto.
             for (ASTNODE statement : ctx.statements) {
                 if (!(statement instanceof StructTypeDecl)
                         && !(statement instanceof MethodDecl)
                         && !(statement instanceof FunctionDecl)
                         && !(statement instanceof MainFunction)) {
                     Visit(statement);
-
-                    if (!this.errors.isEmpty()) {
-                        return defaultVoid;
-                    }
                 }
             }
 
             return defaultVoid;
         }
 
-        // Si NO estamos en nivel global, ejecutamos normal.
-        // Las declaraciones globales inválidas se validan dentro de sus propios visitors.
+        // Dentro de funciones/bloques/main:
+        // NO cortar por errores; se sigue ejecutando para reportar más errores.
         for (ASTNODE statement : ctx.statements) {
             Visit(statement);
-
-            if (!this.errors.isEmpty()) {
-                return defaultVoid;
-            }
         }
 
         return defaultVoid;

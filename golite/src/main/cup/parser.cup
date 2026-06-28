@@ -60,6 +60,11 @@ terminal and, or, not;
 
 nonterminal Statments INICIO;
 nonterminal Statments INSTRUCCIONES;
+nonterminal Statments DECLARACIONES;
+nonterminal ASTNODE DECLARACION;
+nonterminal ASTNODE STRUCT_DECL;
+nonterminal ASTNODE FUNC_DECL;
+nonterminal ASTNODE METHOD_DECL;
 
 nonterminal ASTNODE INSTRUCCION;
 nonterminal ASTNODE EXPRESION;
@@ -120,12 +125,41 @@ start with INICIO;
    INICIO
    ========================= */
 
-INICIO ::= INSTRUCCIONES:i
-           {:
-               RESULT = i;
-           :}
+INICIO ::= DECLARACIONES:d
+           {: RESULT = d; :}
 ;
 
+DECLARACIONES ::= DECLARACIONES:ds DECLARACION:d
+                  {: if (d != null) ds.add(d); RESULT = ds; :}
+
+                | DECLARACION:d
+                  {: RESULT = new Statments(d); :}
+;
+
+DECLARACION ::= STRUCT_DECL:s
+                {: RESULT = s; :}
+
+              | FUNC_DECL:f
+                {: RESULT = f; :}
+
+              | METHOD_DECL:m
+                {: RESULT = m; :}
+
+              | INSTRUCCION:i
+                {: RESULT = i; :}
+
+;
+
+STRUCT_DECL ::= kwStruct id:n lbrace STRUCT_SCOLES STRUCT_FIELDS:f STRUCT_SCOLES rbrace
+                {:
+                    RESULT = new StructTypeDecl(n, f, nleft, nright);
+                :}
+
+              | kwStruct id:n lbrace STRUCT_SCOLES rbrace
+                {:
+                    RESULT = new StructTypeDecl(n, new java.util.ArrayList<StructField>(), nleft, nright);
+                :}
+;
 
 /* =========================
    LISTA DE INSTRUCCIONES GENERAL
@@ -1022,7 +1056,7 @@ STRUCT_FIELDS ::= STRUCT_FIELDS:l STRUCT_SCOLES STRUCT_FIELD:f
                   :}
 ;
 
-STRUCT_FIELD ::= id:n TYPE:t scol
+STRUCT_FIELD ::= TYPE:t id:n STRUCT_SCOLES
                  {:
                      RESULT = new StructField(n, t, nleft, nright);
                  :}
@@ -1239,6 +1273,16 @@ EXPRESION ::= minus EXPRESION:a
             | lbracket rbracket TYPE:t lbrace SLICE_SCOLES rbrace
               {:
                   RESULT = new SliceLiteral(t, new java.util.ArrayList<ASTNODE>(), tleft, tright);
+              :}
+
+                        | lbrace SLICE_SCOLES SLICE_EXPRESIONES:e SLICE_SCOLES rbrace
+              {:
+                  RESULT = new SliceLiteral("int", e, 0, 0);
+              :}
+
+            | lbrace SLICE_SCOLES SLICE_EXPRESIONES:e comma SLICE_SCOLES rbrace
+              {:
+                  RESULT = new SliceLiteral("int", e, 0, 0);
               :}
 
             | EXPRESION:s lbracket EXPRESION:i rbracket
